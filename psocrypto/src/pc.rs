@@ -8,7 +8,8 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 /// cryptography algorithm.
 pub struct PcCipher {
     keys: Vec<u32>,
-    pos: usize
+    pos: usize,
+    seed: u32
 }
 
 impl PcCipher {
@@ -16,7 +17,8 @@ impl PcCipher {
     pub fn new(seed: u32) -> Self {
         PcCipher {
             keys: gen_keys(seed),
-            pos: 56
+            pos: 56,
+            seed: seed
         }
     }
 
@@ -30,6 +32,8 @@ impl PcCipher {
         self.pos += 1;
         re
     }
+
+    pub fn seed(&self) -> u32 { self.seed }
 }
 
 impl Encryptor for PcCipher {
@@ -106,7 +110,7 @@ fn mix_keys(keys: &mut [u32]) {
 fn gen_keys(seed: u32) -> Vec<u32> {
     use std::num::Wrapping as W;
 
-    let mut keys = vec![0; 56];
+    let mut keys = vec![0; 57];
     let mut esi: W<u32>;
     let mut ebx: W<u32>;
     let mut edi: W<u32>;

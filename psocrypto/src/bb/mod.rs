@@ -11,18 +11,18 @@ pub use self::table::BB_TABLE;
 
 /// A cipher struct for encrypting and decrypting data using Blue Burst's
 /// encryption algorithm. This is not a stream cipher.
-pub struct BBCipher {
+pub struct BbCipher {
     keys: Vec<u32>,
     seed: Vec<u8>
 }
 
-impl BBCipher {
-    /// Create a new BBCipher with the given seed.
+impl BbCipher {
+    /// Create a new BbCipher with the given seed.
     pub fn new(seed: &[u8]) -> Self {
         let mut keys = vec![0; 1042];
 
         setup_cryptosetup_bb(&mut keys, seed);
-        BBCipher {
+        BbCipher {
             keys: keys,
             seed: seed.to_vec()
         }
@@ -34,7 +34,7 @@ impl BBCipher {
     }
 }
 
-impl Encryptor for BBCipher {
+impl Encryptor for BbCipher {
     fn encrypt(&mut self, input: &mut RefReadBuffer, output: &mut RefWriteBuffer, _: bool)
     -> Result<BufferResult, SymmetricCipherError> {
         use std::num::Wrapping as W;
@@ -89,7 +89,7 @@ impl Encryptor for BBCipher {
     }
 }
 
-impl Decryptor for BBCipher {
+impl Decryptor for BbCipher {
     fn decrypt(&mut self, input: &mut RefReadBuffer, output: &mut RefWriteBuffer, _: bool)
     -> Result<BufferResult, SymmetricCipherError> {
         use std::num::Wrapping as W;

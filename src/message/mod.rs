@@ -11,9 +11,14 @@ mod prelude {
 
     pub use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
+    pub use crypto::symmetriccipher::{Encryptor, Decryptor};
+    pub use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
+
     pub use super::MessageEncode;
     pub use super::MessageDecode;
     pub use super::Serial;
+    pub use super::HdrSerial;
+    pub use super::MsgHeader;
 }
 
 use self::prelude::*;
@@ -22,14 +27,14 @@ use self::prelude::*;
 /// enumeration.
 pub trait MessageEncode {
     /// Encode this message into a Write.
-    fn encode_msg(&self, dst: &mut Write) -> io::Result<()>;
+    fn encode_msg(&self, dst: &mut Write, encryptor: Option<&mut Encryptor>) -> io::Result<()>;
 }
 
 /// A decodable message. The implementation must be on a Sized because we return
 /// Self by value. Should be implemented over an enum of possible messages.
 pub trait MessageDecode: Sized {
     /// Decode the data in src into an instance of Self.
-    fn decode_msg(src: &mut Read) -> io::Result<Self>;
+    fn decode_msg(src: &mut Read, decryptor: Option<&mut Decryptor>) -> io::Result<Self>;
 }
 
 /// A serializable type.
@@ -37,10 +42,48 @@ pub trait Serial: Sized {
     fn serialize(value: &Self, dst: &mut Write) -> io::Result<()>;
     fn deserialize(src: &mut Read) -> io::Result<Self>;
     fn serial_len(value: &Self) -> usize;
+
+    fn serial_flags(_: &Self) -> u32 { 0 }
+}
+
+/// A generic message header. Only used in deserialization.
+#[derive(Clone, Copy, Debug)]
+pub struct MsgHeader {
+    pub len: u32,
+    pub msg_type: u32,
+    pub flags: u32
+}
+
+impl MsgHeader {
+    pub fn new(len: u32, msg_type: u32, flags: u32) -> MsgHeader {
+        MsgHeader { len: len, msg_type: msg_type, flags: flags }
+    }
+}
+
+/// A trait that serializes and deserializes message headers.
+///
+/// To use, define a type named `HdrSerializer` that is empty inside a message module, and implement
+/// this trait over it. The `define_messages` macro refers to `HdrSerializer` internally, and you
+/// will get compile errors unless it's available.
+///
+/// The packet header for each group of messages is similar but not the same in PSO.
+/// Notably, the patch server does not have a `flags` field at all.
+pub trait HdrSerial {
+    /// Deserialize the header into a `MsgHeader`.
+    ///
+    /// The message size should have the header size subtracted, or the MessageDecode
+    /// implementation will not be able to correctly buffer the message when decoding.
+    fn hdr_deserialize(src: &mut Read, decryptor: Option<&mut Decryptor>) -> io::Result<MsgHeader>;
+
+    /// Serialize the message header for a given message.
+    ///
+    /// The message size should include the header size. The incoming value is only the size of
+    /// the (encrypted) message itself, so you need to add the header size yourself.
+    fn hdr_serialize(value: &MsgHeader, dst: &mut Write, encryptor: Option<&mut Encryptor>) -> io::Result<()>;
 }
 
 macro_rules! define_messages {
-    ($($id:expr => $name:ident { $($message:tt)* } )*) => {
+    ($($id:expr => $name:ident { $($message:tt)* } ),*) => {
 
         $(msg_struct!{ $name { $($message)* } })*
 
@@ -52,16 +95,69 @@ macro_rules! define_messages {
         }
 
         $(impl MessageEncode for $name {
-            fn encode_msg(&self, dst: &mut Write) -> io::Result<()> {
-                try!(<u16 as Serial>::serialize(&$id, dst));
-                <$name as Serial>::serialize(self, dst)
+            fn encode_msg(&self, dst: &mut Write, encryptor: Option<&mut Encryptor>) -> io::Result<()> {
+                use std::io::Cursor;
+                use std::borrow::BorrowMut;
+
+                let hdr = MsgHeader {
+                    len: <$name as Serial>::serial_len(self) as u32,
+                    msg_type: $id as u32,
+                    flags: <$name as Serial>::serial_flags(self) as u32
+                };
+
+                let mut sbuf = vec![0u8; hdr.len as usize];
+                let mut ebuf = vec![0u8; hdr.len as usize];
+                println!("{:?}", hdr);
+                if let Some(e) = encryptor {
+                    try!(HdrSerializer::hdr_serialize(&hdr, dst, Some(e)));
+                    {
+                        let mut cursor = Cursor::new(sbuf.borrow_mut());
+                        try!(<$name as Serial>::serialize(self, &mut cursor as &mut Write));
+                    }
+                    {
+                        if let Err(_) = e.encrypt(&mut RefReadBuffer::new(sbuf.borrow_mut()),
+                                &mut RefWriteBuffer::new(ebuf.borrow_mut()), false) {
+                            return Err(io::Error::new(io::ErrorKind::Other, "Couldn't encrypt"))
+                        }
+                    }
+                    dst.write_all(&ebuf)
+                } else {
+                    try!(HdrSerializer::hdr_serialize(&hdr, dst, None));
+                    <$name as Serial>::serialize(self, dst)
+                }
             }
         })*
 
         impl MessageDecode for Message {
-            fn decode_msg(src: &mut Read) -> io::Result<Self> {
-                match try!(<u16 as Serial>::deserialize(src)) {
-                    $($id => <$name as Serial>::deserialize(src).map(Message::$name),)*
+            fn decode_msg(src: &mut Read, decryptor: Option<&mut Decryptor>) -> io::Result<Self> {
+                use std::borrow::BorrowMut;
+                use std::io::Cursor;
+
+                let hdr;
+                let mut ebuf: Vec<u8>;
+
+                if let Some(d) = decryptor {
+                    hdr = try!(HdrSerializer::hdr_deserialize(src, Some(d)));
+                    let mut sbuf = vec![0u8; hdr.len as usize];
+                    ebuf = vec![0u8; hdr.len as usize];
+                    {if try!(src.read(sbuf.borrow_mut())) != hdr.len as usize {
+                        return Err(io::Error::new(io::ErrorKind::Other, "Buffer underflow decoding message (decrypting)"))
+                    }}
+                    if let Err(_) = d.decrypt(&mut RefReadBuffer::new(sbuf.borrow_mut()),
+                            &mut RefWriteBuffer::new(ebuf.borrow_mut()), false) {
+                        return Err(io::Error::new(io::ErrorKind::Other, "Decryption of message failed"))
+                    }
+                } else {
+                    hdr = try!(HdrSerializer::hdr_deserialize(src, None));
+                    ebuf = vec![0u8; hdr.len as usize];
+                    if try!(src.read(ebuf.borrow_mut())) != hdr.len as usize {
+                        return Err(io::Error::new(io::ErrorKind::Other, "Buffer underflow decoding message (not decrypting)"))
+                    }
+                }
+
+                let mut cursor = Cursor::new(ebuf);
+                match hdr.msg_type {
+                    $($id => <$name as Serial>::deserialize(&mut cursor as &mut Read).map(Message::$name),)*
                     _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "Unrecognized message id"))
                 }
             }
@@ -72,6 +168,7 @@ macro_rules! define_messages {
 macro_rules! msg_struct {
     // some named fields
     ($name:ident { $($fname:ident: $fty:ty),+ }) => {
+        #[derive(Clone, Default, Debug, PartialEq, Eq)]
         pub struct $name {
             $(pub $fname: $fty),*
         }
@@ -92,6 +189,7 @@ macro_rules! msg_struct {
     // no fields
     // custom encoder/decoder
     ($name:ident { $($fname:ident: $fty:ty),+; $impl_struct:item }) => {
+        #[derive(Clone, Default, Debug, PartialEq, Eq)]
         pub struct $name {
             $(pub $fname: $fty),*
         }
@@ -99,6 +197,7 @@ macro_rules! msg_struct {
         $impl_struct
     };
     ($name:ident {}) => {
+        #[derive(Clone, Default, Debug, PartialEq, Eq)]
         pub struct $name;
 
         impl Serial for $name {
@@ -186,8 +285,8 @@ macro_rules! test_size {
     ($t:ty, $tname:ident, $size:expr) => {
         #[test]
         fn $tname() {
-            use std::mem;
-            assert_eq!(mem::size_of::<$t>(), $size);
+            use ::message::Serial;
+            assert_eq!(<$t as Serial>::serial_len(&<$t as Default>::default()), $size);
         }
     }
 }
@@ -204,11 +303,11 @@ impl_prim_serial!(f32, 4, write_f32, read_f32);
 impl_prim_serial!(f64, 8, write_f64, read_f64);
 
 // for the various string and padding sizes
-impl_array_serial!(u8, 1, write_u8, read_u8, 12);
+// impl_array_serial!(u8, 1, write_u8, read_u8, 12);
 impl_array_serial!(u8, 1, write_u8, read_u8, 16);
-impl_array_serial!(u8, 1, write_u8, read_u8, 20);
-impl_array_serial!(u8, 1, write_u8, read_u8, 44);
-impl_array_serial!(u8, 1, write_u8, read_u8, 64);
+// impl_array_serial!(u8, 1, write_u8, read_u8, 20);
+// impl_array_serial!(u8, 1, write_u8, read_u8, 44);
+// impl_array_serial!(u8, 1, write_u8, read_u8, 64);
 
 impl Serial for bool {
     fn serial_len(_: &bool) -> usize { 1 }
@@ -226,49 +325,4 @@ impl Serial for bool {
     }
 }
 
-pub mod patch {
-    use ::message::prelude::*;
-
-    define_messages! {
-        0x02 => Welcome {copyright: [u8; 44], padding: [u8; 20], server_vector: u32, client_vector: u32}
-        0x04 => Login {padding1: [u8; 12], username: [u8; 16], password: [u8; 16], padding2: [u8; 64]}
-        0x06 => FileSend {}
-        0x07 => DataSend {}
-        0x08 => FileDone {}
-        0x09 => SetDirectory {}
-        0x0A => OneDirUp {}
-        0x0B => StartList {}
-        0x0C => FileInfo {}
-        0x0D => InfoFinished {}
-        0x0F => FileInfoReply {}
-        0x10 => FileListDone {}
-        0x11 => SendInfo {}
-        0x12 => SendDone {}
-        0x13 => Motd {}
-        0x14 => Redirect {}
-        0x614 => Redirect6 {}
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        test_size!(Welcome, size_welcome, 0x4c);
-        test_size!(Redirect, size_redirect, 0xc);
-        test_size!(Redirect6, size_redirect6, 0x18);
-        test_size!(FileSend, size_filesend, 0x3c);
-        test_size!(DataSend, size_datasend, 0x10);
-        test_size!(FileDone, size_filedone, 0x8);
-        test_size!(SetDirectory, size_setdir, 0x44);
-        test_size!(FileInfo, size_fileinfo, 0x28);
-        test_size!(FileInfoReply, size_fileinforeply, 0x10);
-        test_size!(SendInfo, size_sendinfo, 0xc);
-    }
-}
-
-pub mod login {
-
-}
-
-pub mod ship {
-
-}
+pub mod patch;

@@ -1,3 +1,5 @@
+//use std::io;
+
 /// Generate a 48-byte random seed for cipher setup.
 pub fn gen_seed() -> Vec<u8> {
     use rand::random;
@@ -13,3 +15,18 @@ pub fn gen_seed() -> Vec<u8> {
     }
     ret
 }
+
+// /// Write a String to a u8 buffer with padding bytes.
+// ///
+// /// The buffer will be completely cleared of data.
+// pub fn string_to_u8<S: Into<String>>(value: S, dst: &mut [u8]) -> io::Result<()> {
+//     for x in dst.iter_mut() {
+//         *x = 0
+//     }
+//     let s: String = value.into();
+//     for c in s.iter() {
+//
+//     }
+//
+//     Ok(())
+// }

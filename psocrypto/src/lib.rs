@@ -1,5 +1,6 @@
 extern crate crypto;
 extern crate byteorder;
+extern crate encoding;
 
 /// PC crypto. Used by patch server on BB as well. The Dreamcast and
 /// PC versions share this crypto format.
@@ -12,4 +13,5 @@ pub mod bb;
 /// this crypto algorithm.
 pub mod gc;
 
-pub use self::bb::BBCipher;
+pub use self::bb::BbCipher;
+pub use self::pc::PcCipher;
