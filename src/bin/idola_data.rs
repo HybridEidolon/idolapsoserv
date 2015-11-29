@@ -133,11 +133,13 @@ fn handle_client(mut ctx: ClientContext) {
         if let Ok(m) = m {match m {
             Message::Login(Login { .. }) => {
                 ctx.send_msg(&StartList, true).unwrap();
-                ctx.send_msg(&SetDirectory { dirname: Vec::new() }, true).unwrap();
+                ctx.send_msg(&SetDirectory { dirname: vec![46] }, true).unwrap();
                 ctx.send_msg(&InfoFinished, true).unwrap();
                 ctx.send_msg(&FileListDone, true).unwrap();
             },
             Message::FileListDone(_) => {
+                ctx.send_msg(&SetDirectory { dirname: vec![46] }, true).unwrap();
+                ctx.send_msg(&OneDirUp, true).unwrap();
                 ctx.send_msg(&SendDone, true).unwrap();
                 info!("client {} was updated successfully", peer);
             }
