@@ -1,38 +1,31 @@
-extern crate idola;
+//! Runs the data provision server, as a component of the patch server.
+extern crate rand;
 extern crate crypto;
 extern crate psocrypto;
-extern crate byteorder;
-extern crate rand;
+extern crate idola;
 #[macro_use] extern crate log;
 extern crate env_logger;
+extern crate byteorder;
 
+use std::net::TcpListener;
+use std::net::TcpStream;
 use std::thread;
 use std::io;
-use std::io::{Write, Read, Cursor};
-use std::net::{TcpListener, TcpStream};
-use std::error::Error;
+use std::io::{Cursor, Read, Write};
 
-use idola::message::{MessageEncode, MessageDecode};
-use idola::message::patch::Message;
-
-use psocrypto::PcCipher;
-
-use crypto::symmetriccipher::{Encryptor, Decryptor, SymmetricCipherError};
+use crypto::symmetriccipher::{Decryptor, Encryptor};
 use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
-
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use psocrypto::PcCipher;
 
 use rand::random;
 
-#[derive(Clone, Copy)]
-enum ClientState {
-    Connected,
-    Welcomed
-}
+use idola::message::{MessageEncode, MessageDecode};
+use idola::message::patch::*;
+
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 struct ClientContext {
     pub stream: TcpStream,
-    pub state: ClientState,
     pub client_cipher: PcCipher,
     pub server_cipher: PcCipher
 }
@@ -120,50 +113,16 @@ impl ClientContext {
     }
 }
 
-unsafe impl Send for ClientState {}
-unsafe impl Send for ClientContext {}
-
 fn handle_client(mut ctx: ClientContext) {
-    use idola::message::patch::*;
-
-    let peer_addr = ctx.stream.peer_addr().unwrap();
-
-    info!("client {} connected", peer_addr);
-
     let w = Welcome {
-        server_vector: ctx.server_cipher.seed(),
-        client_vector: ctx.client_cipher.seed()
+        client_vector: ctx.client_cipher.seed(),
+        server_vector: ctx.server_cipher.seed()
     };
-    if let Err(e) = ctx.send_msg(&w, false) {
-        error!("unable to send welcome message to {}: {}", peer_addr, e);
-        return
+    ctx.send_msg(&w, false).unwrap();
+
+    match ctx.recv_msg(true).unwrap() {
+        m => println!("received {:?}", m)
     }
-
-    ctx.state = ClientState::Welcomed;
-
-    // Client will send a Welcome message as an ack. We reply with a Login ack.
-    {
-        let (size, ty) = match ctx.read_ack(true) { Ok(o) => o, _ => return };
-        if size == 4 || ty == 2 {
-            match ctx.write_ack(true, (4, 4)) { Ok(_) => (), _ => return }
-        } else {
-            // hey man we ain't playin, knock it off.
-            return;
-        }
-    }
-
-    loop {
-        // Read message
-        match ctx.recv_msg(true).unwrap() {
-            Message::Login(Login { .. } ) => {
-                let motd = Motd {
-                    message: "how am I gonna feed all these little... BABS".to_string()
-                };
-                ctx.send_msg(&motd, true).unwrap();
-            },
-            _ => println!("uhhh")
-        }
-    };
 }
 
 fn main() {
@@ -172,23 +131,17 @@ fn main() {
     }
     env_logger::init().unwrap();
 
-    info!("IDOLA Phantasy Star Online Patch Server");
-    info!("Version 0.1.0");
-
-    let tcp_listener = TcpListener::bind("127.0.0.1:11000").unwrap();
+    let tcp_listener = TcpListener::bind("127.0.0.1:11001").unwrap();
     for stream in tcp_listener.incoming() {
         match stream {
             Ok(s) => {
-                let ctx = ClientContext {
+                thread::spawn(move|| handle_client(ClientContext {
                     stream: s,
-                    state: ClientState::Connected,
-                    client_cipher: PcCipher::new(0),
-                    server_cipher: PcCipher::new(0)
-                };
-                thread::spawn(move|| handle_client(ctx));
+                    client_cipher: PcCipher::new(random()),
+                    server_cipher: PcCipher::new(random())
+                }));
             },
-            Err(e) => {println!("Error: could not accept connection from {}", e);}
+            _ => ()
         };
-    }
-    println!("Placeholders");
+    };
 }

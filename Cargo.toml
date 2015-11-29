@@ -10,6 +10,8 @@ byteorder = "0.4.2"
 rustc-serialize = "0.3.16"
 psocrypto = { path = "psocrypto" }
 encoding = "0.2.32"
+log = "0.3.4"
+env_logger = "0.3.2"
 
 [[bin]]
 name = "idola_patch"
@@ -19,3 +21,6 @@ name = "idola_login"
 
 [[bin]]
 name = "idola_ship"
+
+[[bin]]
+name = "idola_data"

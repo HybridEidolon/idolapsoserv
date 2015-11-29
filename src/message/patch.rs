@@ -47,7 +47,7 @@ impl HdrSerial for HdrSerializer {
             {
                 let mut cur = Cursor::new(&mut wbuf[..]);
                 try!(cur.write_u16::<LittleEndian>(len as u16 + 4));
-                try!(dst.write_u16::<LittleEndian>(msg_type as u16));
+                try!(cur.write_u16::<LittleEndian>(msg_type as u16));
             }
             {
                 if let Err(_) = e.encrypt(&mut RefReadBuffer::new(&wbuf),
