@@ -245,7 +245,30 @@ define_messages! {
             }
         }
     },
-    0x14 => Redirect { ip_addr: u32, port: u16, padding: u16 },
+    0x14 => Redirect { ip_addr: Ipv4Addr, port: u16;
+        impl Serial for Redirect {
+            fn serial_len(_: &Redirect) -> usize { 8 }
+            fn serialize(value: &Redirect, dst: &mut Write) -> io::Result<()> {
+                use std::convert::Into;
+                try!(dst.write_u32::<BigEndian>(value.ip_addr.into()));
+                try!(dst.write_u16::<BigEndian>(value.port));
+                try!(dst.write_u16::<LittleEndian>(0));
+                Ok(())
+            }
+            fn deserialize(src: &mut Read) -> io::Result<Redirect> {
+                use std::convert::Into;
+                let ip_addr: Ipv4Addr = try!(src.read_u32::<BigEndian>()).into();
+                let port = try!(src.read_u16::<BigEndian>());
+                if try!(src.read_u16::<LittleEndian>()) != 0 {
+                    return Err(io::Error::new(io::ErrorKind::Other, "expected 0 in padding area"))
+                }
+                Ok(Redirect {
+                    ip_addr: ip_addr,
+                    port: port
+                })
+            }
+        }
+    },
     0x614 => Redirect6 { ip_addr: [u8; 16], port: u16, padding: u16 }
 }
 

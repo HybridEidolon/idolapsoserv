@@ -153,22 +153,29 @@ fn handle_client(mut ctx: ClientContext) {
     }
 
     loop {
+        use std::net::Ipv4Addr;
+        use std::str::FromStr;
         // Read message
-        match ctx.recv_msg(true).unwrap() {
+        if let Ok(s) = ctx.recv_msg(true) {match s {
             Message::Login(Login { .. } ) => {
                 let motd = Motd {
-                    message: "how am I gonna feed all these little... BABS".to_string()
+                    message: "how am I gonna feed all these little... BABS\nhey there\n\n:)".to_string()
                 };
                 ctx.send_msg(&motd, true).unwrap();
+                let red = Redirect { ip_addr: Ipv4Addr::from_str("127.0.0.1").unwrap(), port: 11001 };
+                ctx.send_msg(&red, true).unwrap();
+                // Now we break out of this connection.
+                return;
             },
             _ => println!("uhhh")
-        }
+        }}
     };
 }
 
 fn main() {
     if let Err(_) = std::env::var("RUST_LOG") {
         std::env::set_var("RUST_LOG", "DEBUG");
+        std::env::set_var("RUST_BACKTRACE", "1");
     }
     env_logger::init().unwrap();
 

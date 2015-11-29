@@ -9,7 +9,9 @@ mod prelude {
     pub use std::io;
     pub use std::io::{Read, Write};
 
-    pub use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+    pub use std::net::Ipv4Addr;
+
+    pub use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 
     pub use crypto::symmetriccipher::{Encryptor, Decryptor};
     pub use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
@@ -189,7 +191,7 @@ macro_rules! msg_struct {
     // no fields
     // custom encoder/decoder
     ($name:ident { $($fname:ident: $fty:ty),+; $impl_struct:item }) => {
-        #[derive(Clone, Default, Debug, PartialEq, Eq)]
+        #[derive(Clone, Debug, PartialEq, Eq)]
         pub struct $name {
             $(pub $fname: $fty),*
         }
@@ -197,7 +199,7 @@ macro_rules! msg_struct {
         $impl_struct
     };
     ($name:ident {}) => {
-        #[derive(Clone, Default, Debug, PartialEq, Eq)]
+        #[derive(Clone, Debug, PartialEq, Eq)]
         pub struct $name;
 
         impl Serial for $name {

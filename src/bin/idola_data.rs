@@ -114,15 +114,40 @@ impl ClientContext {
 }
 
 fn handle_client(mut ctx: ClientContext) {
+    let peer = ctx.stream.peer_addr().unwrap();
+
+    info!("connected {}", peer);
+
     let w = Welcome {
         client_vector: ctx.client_cipher.seed(),
         server_vector: ctx.server_cipher.seed()
     };
     ctx.send_msg(&w, false).unwrap();
 
-    match ctx.recv_msg(true).unwrap() {
-        m => println!("received {:?}", m)
+    if let Ok((4, 2)) = ctx.read_ack(true) {
+        ctx.write_ack(true, (4, 4)).unwrap();
+    } else { return }
+
+    loop {
+        let m = ctx.recv_msg(true);
+        if let Ok(m) = m {match m {
+            Message::Login(Login { .. }) => {
+                ctx.send_msg(&StartList, true).unwrap();
+                ctx.send_msg(&SetDirectory { dirname: Vec::new() }, true).unwrap();
+                ctx.send_msg(&InfoFinished, true).unwrap();
+                ctx.send_msg(&FileListDone, true).unwrap();
+            },
+            Message::FileListDone(_) => {
+                ctx.send_msg(&SendDone, true).unwrap();
+                info!("client {} was updated successfully", peer);
+            }
+            e => info!("recv something else! {:?}", e)
+        }} else {
+            return
+        }
     }
+
+    info!("disconnecting {}", peer);
 }
 
 fn main() {
@@ -131,7 +156,11 @@ fn main() {
     }
     env_logger::init().unwrap();
 
+    info!("IDOLA Phantasy Star Online Data Server");
+    info!("Version 0.1.0");
+
     let tcp_listener = TcpListener::bind("127.0.0.1:11001").unwrap();
+    info!("Started");
     for stream in tcp_listener.incoming() {
         match stream {
             Ok(s) => {
