@@ -10,6 +10,7 @@ use std::thread;
 use std::io;
 use std::io::{Write, Read};
 use std::net::{TcpListener, TcpStream};
+use std::fmt::Debug;
 
 use idola::message::{MessageEncode, MessageDecode};
 use idola::message::patch::Message;
@@ -33,11 +34,13 @@ struct ClientContext {
 
 impl ClientContext {
     /// Send a message struct.
-    fn send_msg(&mut self, msg: &MessageEncode, encrypt: bool) -> io::Result<()> {
+    fn send_msg<T: MessageEncode + Debug>(&mut self, msg: &T, encrypt: bool) -> io::Result<()> {
         if encrypt {
+            debug!("msg send: {:?}", msg);
             try!(msg.encode_msg(&mut self.stream as &mut Write, Some(&mut self.server_cipher)));
             self.stream.flush()
         } else {
+            debug!("msg send (unenc): {:?}", msg);
             try!(msg.encode_msg(&mut self.stream as &mut Write, None));
             self.stream.flush()
         }
@@ -99,7 +102,7 @@ fn handle_client(mut ctx: ClientContext) {
         if let Ok(s) = ctx.recv_msg(true) {match s {
             Message::Login(Some(_)) => {
                 let motd = Motd {
-                    message: "how am I gonna feed all these little... BABS\nhey there\n\n:)".to_string()
+                    message: "how am I gonna feed all these little... BABS\nhey there\n\nrust is cool".to_string()
                 };
                 ctx.send_msg(&motd, true).unwrap();
                 let red = Redirect { ip_addr: Ipv4Addr::from_str("127.0.0.1").unwrap(), port: 11001 };

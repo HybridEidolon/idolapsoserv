@@ -11,10 +11,10 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 use std::thread;
 use std::io;
-use std::io::{Cursor, Read, Write};
+use std::io::{Read, Write};
+use std::fmt::Debug;
 
-use crypto::symmetriccipher::{Decryptor, Encryptor};
-use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
+use crypto::symmetriccipher::{Decryptor};
 use psocrypto::PcCipher;
 
 use rand::random;
@@ -23,8 +23,6 @@ use idola::message::{MessageEncode, MessageDecode};
 use idola::message::patch::*;
 use idola::message::staticvec::StaticVec;
 
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-
 struct ClientContext {
     pub stream: TcpStream,
     pub client_cipher: PcCipher,
@@ -32,65 +30,14 @@ struct ClientContext {
 }
 
 impl ClientContext {
-    fn read_ack(&mut self, enc: bool) -> io::Result<(u16, u16)> {
-        let size;
-        let ty;
-        let mut rbuf = [0u8; 4];
-        let mut ebuf = [0u8; 4];
-        let mut cur;
-        {try!(self.stream.read(&mut rbuf));}
-        if enc {
-            {
-                if let Err(e) = self.client_cipher.decrypt(
-                    &mut RefReadBuffer::new(&rbuf[..]),
-                    &mut RefWriteBuffer::new(&mut ebuf[..]), false) {
-                    return Err(io::Error::new(io::ErrorKind::Other, format!("unable to encrypt: {:?}", e)))
-                }
-            }
-            {
-                cur = Cursor::new(&ebuf);
-                size = cur.read_u16::<LittleEndian>().unwrap();
-                ty = cur.read_u16::<LittleEndian>().unwrap();
-            }
-        } else {
-            cur = Cursor::new(&rbuf);
-            size = cur.read_u16::<LittleEndian>().unwrap();
-            ty = cur.read_u16::<LittleEndian>().unwrap();
-        }
-        Ok((size, ty))
-    }
-
-    fn write_ack(&mut self, enc: bool, ack: (u16, u16)) -> io::Result<()> {
-        let (size, ty) = ack;
-        let mut wbuf = [0u8; 4];
-        let mut ebuf = [0u8; 4];
-        {
-            let mut cur = Cursor::new(&mut wbuf[..]);
-            try!(cur.write_u16::<LittleEndian>(size));
-            try!(cur.write_u16::<LittleEndian>(ty));
-        }
-        if enc {
-            if let Err(e) = self.server_cipher.encrypt(
-                &mut RefReadBuffer::new(& wbuf[..]),
-                &mut RefWriteBuffer::new(&mut ebuf), false) {
-                Err(io::Error::new(
-                    io::ErrorKind::Other, format!("unable to encrypt ack message: {:?}", e)))
-            } else {
-                try!(self.stream.write_all(&ebuf));
-                self.stream.flush()
-            }
-        } else {
-            try!(self.stream.write_all(&wbuf));
-            self.stream.flush()
-        }
-    }
-
     /// Send a message struct.
-    fn send_msg(&mut self, msg: &MessageEncode, encrypt: bool) -> io::Result<()> {
+    fn send_msg<T: MessageEncode + Debug>(&mut self, msg: &T, encrypt: bool) -> io::Result<()> {
         if encrypt {
+            debug!("msg send: {:?}", msg);
             try!(msg.encode_msg(&mut self.stream as &mut Write, Some(&mut self.server_cipher)));
             self.stream.flush()
         } else {
+            debug!("msg send (unenc): {:?}", msg);
             try!(msg.encode_msg(&mut self.stream as &mut Write, None));
             self.stream.flush()
         }
@@ -125,20 +72,20 @@ fn handle_client(mut ctx: ClientContext) {
     };
     ctx.send_msg(&w, false).unwrap();
 
-    if let Ok((4, 2)) = ctx.read_ack(true) {
-        ctx.write_ack(true, (4, 4)).unwrap();
-    } else { return }
+    if let Ok(Message::Welcome(None)) = ctx.recv_msg(true) {
+        ctx.send_msg(&Message::Login(None), true).unwrap();
+    }
 
     loop {
         let m = ctx.recv_msg(true);
         if let Ok(m) = m {match m {
-            Message::Login(Some(Login { .. })) => {
+            Message::Login(Some(_)) => {
                 ctx.send_msg(&StartList, true).unwrap();
                 ctx.send_msg(&SetDirectory { dirname: StaticVec::default() }, true).unwrap();
                 ctx.send_msg(&InfoFinished, true).unwrap();
-                ctx.send_msg(&FileListDone, true).unwrap();
+                //ctx.send_msg(&FileListDone, true).unwrap();
             },
-            Message::FileListDone(Some(_)) => {
+            Message::FileListDone(_) => {
                 ctx.send_msg(&SetDirectory { dirname: StaticVec::default() }, true).unwrap();
                 ctx.send_msg(&OneDirUp, true).unwrap();
                 ctx.send_msg(&SendDone, true).unwrap();
