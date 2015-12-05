@@ -21,6 +21,7 @@ use rand::random;
 
 use idola::message::{MessageEncode, MessageDecode};
 use idola::message::patch::*;
+use idola::message::staticvec::StaticVec;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
@@ -133,12 +134,12 @@ fn handle_client(mut ctx: ClientContext) {
         if let Ok(m) = m {match m {
             Message::Login(Some(Login { .. })) => {
                 ctx.send_msg(&StartList, true).unwrap();
-                ctx.send_msg(&SetDirectory { dirname: vec![46] }, true).unwrap();
+                ctx.send_msg(&SetDirectory { dirname: StaticVec::default() }, true).unwrap();
                 ctx.send_msg(&InfoFinished, true).unwrap();
                 ctx.send_msg(&FileListDone, true).unwrap();
             },
             Message::FileListDone(Some(_)) => {
-                ctx.send_msg(&SetDirectory { dirname: vec![46] }, true).unwrap();
+                ctx.send_msg(&SetDirectory { dirname: StaticVec::default() }, true).unwrap();
                 ctx.send_msg(&OneDirUp, true).unwrap();
                 ctx.send_msg(&SendDone, true).unwrap();
                 info!("client {} was updated successfully", peer);

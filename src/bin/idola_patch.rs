@@ -86,7 +86,7 @@ fn handle_client(mut ctx: ClientContext) {
     // Client will send a Welcome message as an ack. We reply with a Login ack.
     if let Ok(s) = ctx.recv_msg(true) {
         info!("received a message after being welcomed");
-        if s == Message::Welcome(None) {
+        if let Message::Welcome(None) = s {
             info!("sending login ack");
             match ctx.send_msg(&Message::Login(None), true) { Err(_) => return, _ => () }
         }

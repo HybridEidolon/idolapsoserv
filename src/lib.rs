@@ -3,6 +3,7 @@ extern crate crypto;
 extern crate psocrypto;
 extern crate byteorder;
 extern crate encoding;
+extern crate typenum;
 
 /// Common message-related types.
 pub mod message;

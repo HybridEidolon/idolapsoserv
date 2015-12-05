@@ -12,6 +12,7 @@ psocrypto = { path = "psocrypto" }
 encoding = "0.2.32"
 log = "0.3.4"
 env_logger = "0.3.2"
+typenum = "1.1.0"
 
 [[bin]]
 name = "idola_patch"
