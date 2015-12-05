@@ -19,6 +19,8 @@ use psocrypto::PcCipher;
 
 use crypto::symmetriccipher::Decryptor;
 
+use rand::random;
+
 #[derive(Clone, Copy)]
 enum ClientState {
     Connected,
@@ -132,8 +134,8 @@ fn main() {
                 let ctx = ClientContext {
                     stream: s,
                     state: ClientState::Connected,
-                    client_cipher: PcCipher::new(0),
-                    server_cipher: PcCipher::new(0)
+                    client_cipher: PcCipher::new(random()),
+                    server_cipher: PcCipher::new(random())
                 };
                 thread::spawn(move|| handle_client(ctx));
             },
