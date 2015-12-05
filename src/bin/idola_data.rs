@@ -131,13 +131,13 @@ fn handle_client(mut ctx: ClientContext) {
     loop {
         let m = ctx.recv_msg(true);
         if let Ok(m) = m {match m {
-            Message::Login(Login { .. }) => {
+            Message::Login(Some(Login { .. })) => {
                 ctx.send_msg(&StartList, true).unwrap();
                 ctx.send_msg(&SetDirectory { dirname: vec![46] }, true).unwrap();
                 ctx.send_msg(&InfoFinished, true).unwrap();
                 ctx.send_msg(&FileListDone, true).unwrap();
             },
-            Message::FileListDone(_) => {
+            Message::FileListDone(Some(_)) => {
                 ctx.send_msg(&SetDirectory { dirname: vec![46] }, true).unwrap();
                 ctx.send_msg(&OneDirUp, true).unwrap();
                 ctx.send_msg(&SendDone, true).unwrap();
@@ -149,7 +149,7 @@ fn handle_client(mut ctx: ClientContext) {
         }
     }
 
-    info!("disconnecting {}", peer);
+    //info!("disconnecting {}", peer);
 }
 
 fn main() {

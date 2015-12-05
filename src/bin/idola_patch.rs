@@ -8,21 +8,15 @@ extern crate env_logger;
 
 use std::thread;
 use std::io;
-use std::io::{Write, Read, Cursor};
+use std::io::{Write, Read};
 use std::net::{TcpListener, TcpStream};
-use std::error::Error;
 
 use idola::message::{MessageEncode, MessageDecode};
 use idola::message::patch::Message;
 
 use psocrypto::PcCipher;
 
-use crypto::symmetriccipher::{Encryptor, Decryptor, SymmetricCipherError};
-use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
-
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-
-use rand::random;
+use crypto::symmetriccipher::Decryptor;
 
 #[derive(Clone, Copy)]
 enum ClientState {
@@ -38,59 +32,6 @@ struct ClientContext {
 }
 
 impl ClientContext {
-    fn read_ack(&mut self, enc: bool) -> io::Result<(u16, u16)> {
-        let size;
-        let ty;
-        let mut rbuf = [0u8; 4];
-        let mut ebuf = [0u8; 4];
-        let mut cur;
-        {try!(self.stream.read(&mut rbuf));}
-        if enc {
-            {
-                if let Err(e) = self.client_cipher.decrypt(
-                    &mut RefReadBuffer::new(&rbuf[..]),
-                    &mut RefWriteBuffer::new(&mut ebuf[..]), false) {
-                    return Err(io::Error::new(io::ErrorKind::Other, format!("unable to encrypt: {:?}", e)))
-                }
-            }
-            {
-                cur = Cursor::new(&ebuf);
-                size = cur.read_u16::<LittleEndian>().unwrap();
-                ty = cur.read_u16::<LittleEndian>().unwrap();
-            }
-        } else {
-            cur = Cursor::new(&rbuf);
-            size = cur.read_u16::<LittleEndian>().unwrap();
-            ty = cur.read_u16::<LittleEndian>().unwrap();
-        }
-        Ok((size, ty))
-    }
-
-    fn write_ack(&mut self, enc: bool, ack: (u16, u16)) -> io::Result<()> {
-        let (size, ty) = ack;
-        let mut wbuf = [0u8; 4];
-        let mut ebuf = [0u8; 4];
-        {
-            let mut cur = Cursor::new(&mut wbuf[..]);
-            try!(cur.write_u16::<LittleEndian>(size));
-            try!(cur.write_u16::<LittleEndian>(ty));
-        }
-        if enc {
-            if let Err(e) = self.server_cipher.encrypt(
-                &mut RefReadBuffer::new(& wbuf[..]),
-                &mut RefWriteBuffer::new(&mut ebuf), false) {
-                Err(io::Error::new(
-                    io::ErrorKind::Other, format!("unable to encrypt ack message: {:?}", e)))
-            } else {
-                try!(self.stream.write_all(&ebuf));
-                self.stream.flush()
-            }
-        } else {
-            try!(self.stream.write_all(&wbuf));
-            self.stream.flush()
-        }
-    }
-
     /// Send a message struct.
     fn send_msg(&mut self, msg: &MessageEncode, encrypt: bool) -> io::Result<()> {
         if encrypt {
@@ -102,7 +43,7 @@ impl ClientContext {
         }
     }
 
-    /// Receive a message enum. Will
+    /// Receive a message enum.
     fn recv_msg(&mut self, decrypt: bool) -> io::Result<Message> {
         if decrypt {
             let m = Message::decode_msg(&mut self.stream as &mut Read, Some(&mut self.client_cipher as &mut Decryptor));
@@ -138,17 +79,16 @@ fn handle_client(mut ctx: ClientContext) {
         error!("unable to send welcome message to {}: {}", peer_addr, e);
         return
     }
+    info!("client {} welcomed", peer_addr);
 
     ctx.state = ClientState::Welcomed;
 
     // Client will send a Welcome message as an ack. We reply with a Login ack.
-    {
-        let (size, ty) = match ctx.read_ack(true) { Ok(o) => o, _ => return };
-        if size == 4 || ty == 2 {
-            match ctx.write_ack(true, (4, 4)) { Ok(_) => (), _ => return }
-        } else {
-            // hey man we ain't playin, knock it off.
-            return;
+    if let Ok(s) = ctx.recv_msg(true) {
+        info!("received a message after being welcomed");
+        if s == Message::Welcome(None) {
+            info!("sending login ack");
+            match ctx.send_msg(&Message::Login(None), true) { Err(_) => return, _ => () }
         }
     }
 
@@ -157,7 +97,7 @@ fn handle_client(mut ctx: ClientContext) {
         use std::str::FromStr;
         // Read message
         if let Ok(s) = ctx.recv_msg(true) {match s {
-            Message::Login(Login { .. } ) => {
+            Message::Login(Some(_)) => {
                 let motd = Motd {
                     message: "how am I gonna feed all these little... BABS\nhey there\n\n:)".to_string()
                 };

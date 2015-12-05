@@ -25,8 +25,9 @@ mod prelude {
 
 use self::prelude::*;
 
-/// An encodable message. Implement for the direct message struct, not the wrapper
-/// enumeration.
+/// An encodable message. Implement for both the message enumeration and each individual message
+/// body. For the message namespace enumeration, there should be a way of sending an 'ack' message
+/// that does not contain the body of the message, rather only the header.
 pub trait MessageEncode {
     /// Encode this message into a Write.
     fn encode_msg(&self, dst: &mut Write, encryptor: Option<&mut Encryptor>) -> io::Result<()>;
@@ -93,7 +94,7 @@ macro_rules! define_messages {
         #[derive(Clone, Debug, PartialEq, Eq)]
         pub enum Message {
             $(
-                $name($name),
+                $name(Option<$name>),
             )*
         }
 
@@ -130,6 +131,19 @@ macro_rules! define_messages {
             }
         })*
 
+        impl MessageEncode for Message {
+            fn encode_msg(&self, dst: &mut Write, encrypter: Option<&mut Encryptor>) -> io::Result<()> {
+                fn encode_hdr_only(msg_type: u32, dst: &mut Write, encryptor: Option<&mut Encryptor>) -> io::Result<()> {
+                    let hdr = MsgHeader { len: 0, msg_type: msg_type, flags: 0 };
+                    HdrSerializer::hdr_serialize(&hdr, dst, encryptor)
+                }
+                match self {
+                    $(&Message::$name(Some(ref s)) => s.encode_msg(dst, encrypter),)*
+                    $(&Message::$name(_) => encode_hdr_only($id, dst, encrypter),)*
+                }
+            }
+        }
+
         impl MessageDecode for Message {
             fn decode_msg(src: &mut Read, decryptor: Option<&mut Decryptor>) -> io::Result<Self> {
                 use std::borrow::BorrowMut;
@@ -140,6 +154,14 @@ macro_rules! define_messages {
 
                 if let Some(d) = decryptor {
                     hdr = try!(HdrSerializer::hdr_deserialize(src, Some(d)));
+                    if hdr.len == 0 {
+                        // The message is an "ack" type, meaning there's no actual body.
+                        return match hdr.msg_type {
+                            $($id => Ok(Message::$name(None)),)*
+                            _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, "Unrecognized message id (ack message, encrypted)"))
+                        }
+                    }
+
                     let mut sbuf = vec![0u8; hdr.len as usize];
                     ebuf = vec![0u8; hdr.len as usize];
                     {if try!(src.read(sbuf.borrow_mut())) != hdr.len as usize {
@@ -151,6 +173,14 @@ macro_rules! define_messages {
                     }
                 } else {
                     hdr = try!(HdrSerializer::hdr_deserialize(src, None));
+                    if hdr.len == 0 {
+                        // The message is an "ack" type, meaning there's no actual body.
+                        return match hdr.msg_type {
+                            $($id => Ok(Message::$name(None)),)*
+                            _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, "Unrecognized message id (ack message, unencrypted)"))
+                        }
+                    }
+
                     ebuf = vec![0u8; hdr.len as usize];
                     if try!(src.read(ebuf.borrow_mut())) != hdr.len as usize {
                         return Err(io::Error::new(io::ErrorKind::Other, "Buffer underflow decoding message (not decrypting)"))
@@ -159,7 +189,7 @@ macro_rules! define_messages {
 
                 let mut cursor = Cursor::new(ebuf);
                 match hdr.msg_type {
-                    $($id => <$name as Serial>::deserialize(&mut cursor as &mut Read).map(Message::$name),)*
+                    $($id => <$name as Serial>::deserialize(&mut cursor as &mut Read).map(|s| Message::$name(Some(s))),)*
                     _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "Unrecognized message id"))
                 }
             }
