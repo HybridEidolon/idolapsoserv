@@ -4,6 +4,7 @@ extern crate psocrypto;
 extern crate byteorder;
 extern crate encoding;
 extern crate typenum;
+#[macro_use] extern crate log;
 
 /// Common message-related types.
 pub mod message;
@@ -14,6 +15,7 @@ pub mod patch;
 /// Game information structures.
 pub mod game {
     /// An enumeration of PSO versions.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub enum Version {
         /// Phantasy Star Online: Blue Burst
         BlueBurst,
@@ -29,6 +31,8 @@ pub mod game {
         DCV1
     }
 }
+
+pub mod context;
 
 /// Utility functions
 pub mod util;

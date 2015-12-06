@@ -114,8 +114,8 @@ define_messages! {
                     Err(_) => panic!("oh so uh this Motd string is not UTF-16 encodable")
                 };
                 // must be divisible by 2 for encryption reasons
-                if enc.len() % 2 > 0 {
-                    enc.len() + 1
+                if enc.len() % 4 > 0 {
+                    enc.len() + 4 - enc.len() % 4
                 } else { enc.len() }
             }
 
