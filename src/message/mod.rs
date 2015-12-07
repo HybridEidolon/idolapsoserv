@@ -28,6 +28,8 @@ mod prelude {
     pub use super::staticvec::StaticVec;
 }
 
+pub mod bb;
+
 use self::prelude::*;
 
 /// An encodable message. Implement for both the message enumeration and each individual message
