@@ -1,6 +1,5 @@
 //! Runs the data provision server, as a component of the patch server.
 extern crate rand;
-extern crate crypto;
 extern crate psocrypto;
 extern crate idola;
 #[macro_use] extern crate log;

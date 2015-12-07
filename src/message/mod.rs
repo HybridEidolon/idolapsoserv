@@ -15,8 +15,7 @@ mod prelude {
 
     pub use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 
-    pub use crypto::symmetriccipher::{Encryptor, Decryptor};
-    pub use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
+    pub use psocrypto::{Encryptor, Decryptor};
 
     pub use typenum::uint::Unsigned;
     pub use typenum::NonZero;
@@ -107,7 +106,6 @@ macro_rules! define_messages {
         $(impl MessageEncode for $name {
             fn encode_msg(&self, dst: &mut Write, encryptor: Option<&mut Encryptor>) -> io::Result<()> {
                 use std::io::Cursor;
-                use std::borrow::BorrowMut;
 
                 let hdr = MsgHeader {
                     len: <$name as Serial>::serial_len(self) as u32,
@@ -120,16 +118,15 @@ macro_rules! define_messages {
                 if let Some(e) = encryptor {
                     try!(HdrSerializer::hdr_serialize(&hdr, dst, Some(e)));
                     {
-                        let mut cursor = Cursor::new(sbuf.borrow_mut());
+                        let mut cursor = Cursor::new(&mut sbuf[..]);
                         try!(<$name as Serial>::serialize(self, &mut cursor as &mut Write));
                     }
                     {
-                        if let Err(_) = e.encrypt(&mut RefReadBuffer::new(sbuf.borrow_mut()),
-                                &mut RefWriteBuffer::new(ebuf.borrow_mut()), false) {
-                            return Err(io::Error::new(io::ErrorKind::Other, "Couldn't encrypt"))
+                        if let Err(s) = e.encrypt(&sbuf[..], &mut ebuf[..]) {
+                            return Err(io::Error::new(io::ErrorKind::Other, s))
                         }
                     }
-                    dst.write_all(&ebuf)
+                    dst.write_all(&ebuf[..])
                 } else {
                     try!(HdrSerializer::hdr_serialize(&hdr, dst, None));
                     <$name as Serial>::serialize(self, dst)
@@ -173,8 +170,7 @@ macro_rules! define_messages {
                     {if try!(src.read(sbuf.borrow_mut())) != hdr.len as usize {
                         return Err(io::Error::new(io::ErrorKind::Other, "Buffer underflow decoding message (decrypting)"))
                     }}
-                    if let Err(_) = d.decrypt(&mut RefReadBuffer::new(sbuf.borrow_mut()),
-                            &mut RefWriteBuffer::new(ebuf.borrow_mut()), false) {
+                    if let Err(_) = d.decrypt(&sbuf[..], &mut ebuf[..]) {
                         return Err(io::Error::new(io::ErrorKind::Other, "Decryption of message failed"))
                     }
                 } else {

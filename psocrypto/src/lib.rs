@@ -1,4 +1,3 @@
-extern crate crypto;
 extern crate byteorder;
 extern crate encoding;
 
@@ -15,3 +14,11 @@ pub mod gc;
 
 pub use self::bb::BbCipher;
 pub use self::pc::PcCipher;
+
+pub trait Encryptor {
+    fn encrypt(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String>;
+}
+
+pub trait Decryptor {
+    fn decrypt(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String>;
+}

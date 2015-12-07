@@ -1,7 +1,6 @@
 use std::io::Cursor;
 
-use crypto::symmetriccipher::{Decryptor, Encryptor, SymmetricCipherError};
-use crypto::buffer::{BufferResult, RefReadBuffer, RefWriteBuffer, ReadBuffer, WriteBuffer};
+use ::{Decryptor, Encryptor};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
@@ -35,14 +34,11 @@ impl BbCipher {
 }
 
 impl Encryptor for BbCipher {
-    fn encrypt(&mut self, input: &mut RefReadBuffer, output: &mut RefWriteBuffer, _: bool)
-    -> Result<BufferResult, SymmetricCipherError> {
+    fn encrypt(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String> {
         use std::num::Wrapping as W;
 
-        let i = input.take_remaining();
-        let o = output.take_remaining();
-        let mut ci = Cursor::new(i);
-        let mut co = Cursor::new(o);
+        let mut ci = Cursor::new(input);
+        let mut co = Cursor::new(output);
 
         // Operate on 2 u32 at a time
         loop {
@@ -54,10 +50,10 @@ impl Encryptor for BbCipher {
 
             if let Ok(n) = ci.read_u32::<LittleEndian>() {
                 n1 = W(n)
-            } else { return Ok(BufferResult::BufferUnderflow) }
+            } else { return Ok(()) }
             if let Ok(n) = ci.read_u32::<LittleEndian>() {
                 n2 = W(n)
-            } else { return Err(SymmetricCipherError::InvalidLength) }
+            } else { return Err("Buffer length not multiple of 8.".to_string()) }
 
             n1 = n1 ^ W(self.keys[0]);
             tmp1 = (((W(self.keys[(n1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((n1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))
@@ -80,24 +76,21 @@ impl Encryptor for BbCipher {
 
             // Write phase
             if let Err(_) = co.write_u32::<LittleEndian>(tmp1.0) {
-                return Ok(BufferResult::BufferOverflow)
+                return Ok(())
             }
             if let Err(_) = co.write_u32::<LittleEndian>(n1.0) {
-                return Err(SymmetricCipherError::InvalidLength)
+                return Err("Output buffer not multiple of 8.".to_string())
             }
         }
     }
 }
 
 impl Decryptor for BbCipher {
-    fn decrypt(&mut self, input: &mut RefReadBuffer, output: &mut RefWriteBuffer, _: bool)
-    -> Result<BufferResult, SymmetricCipherError> {
+    fn decrypt(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String> {
         use std::num::Wrapping as W;
 
-        let i = input.take_remaining();
-        let o = output.take_remaining();
-        let mut ci = Cursor::new(i);
-        let mut co = Cursor::new(o);
+        let mut ci = Cursor::new(input);
+        let mut co = Cursor::new(output);
 
         // Operate on 2 u32 at a time
         loop {
@@ -109,10 +102,10 @@ impl Decryptor for BbCipher {
 
             if let Ok(n) = ci.read_u32::<LittleEndian>() {
                 n1 = W(n)
-            } else { return Ok(BufferResult::BufferUnderflow) }
+            } else { return Ok(()) }
             if let Ok(n) = ci.read_u32::<LittleEndian>() {
                 n2 = W(n)
-            } else { return Err(SymmetricCipherError::InvalidLength) }
+            } else { return Err("Invalid length".to_string()) }
 
             n1 = n1 ^ W(self.keys[5]);
             tmp1 = (((W(self.keys[(n1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((n1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))
@@ -135,10 +128,10 @@ impl Decryptor for BbCipher {
 
             // Write phase
             if let Err(_) = co.write_u32::<LittleEndian>(tmp1.0) {
-                return Ok(BufferResult::BufferOverflow)
+                return Ok(())
             }
             if let Err(_) = co.write_u32::<LittleEndian>(n1.0) {
-                return Err(SymmetricCipherError::InvalidLength)
+                return Err("Output buffer is not big enough".to_string())
             }
         }
     }

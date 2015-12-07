@@ -1,5 +1,4 @@
-use crypto::symmetriccipher::{Decryptor, Encryptor, SynchronousStreamCipher, SymmetricCipherError};
-use crypto::buffer::{BufferResult, RefReadBuffer, RefWriteBuffer, ReadBuffer, WriteBuffer};
+use ::{Decryptor, Encryptor};
 
 use std::io::Cursor;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -33,43 +32,33 @@ impl PcCipher {
         re
     }
 
-    pub fn seed(&self) -> u32 { self.seed }
-}
-
-impl Encryptor for PcCipher {
-    fn encrypt(&mut self, input: &mut RefReadBuffer, output: &mut RefWriteBuffer, _: bool)
-    -> Result<BufferResult, SymmetricCipherError> {
-        use std::cmp;
-        let count = cmp::min(input.remaining(), output.remaining());
-        self.process(input.take_next(count), output.take_next(count));
-        if input.is_empty() {
-            Ok(BufferResult::BufferOverflow)
-        } else {
-            Ok(BufferResult::BufferOverflow)
-        }
-    }
-}
-
-impl Decryptor for PcCipher {
-    fn decrypt(&mut self, input: &mut RefReadBuffer, output: &mut RefWriteBuffer, eof: bool)
-    -> Result<BufferResult, SymmetricCipherError> {
-        self.encrypt(input, output, eof)
-    }
-}
-
-impl SynchronousStreamCipher for PcCipher {
-    fn process(&mut self, input: &[u8], output: &mut [u8]) {
+    fn process(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String> {
         let mut ci = Cursor::new(input);
         let mut co = Cursor::new(output);
         loop {
             if let Ok(num) = ci.read_u32::<LittleEndian>() {
                 if let Err(_) = co.write_u32::<LittleEndian>(num ^ self.get_next_key()) {
-                    break
+                    return Err("Input buffer invalid length".to_string())
                 }
             } else {
                 break
             }
         }
+        Ok(())
+    }
+
+    pub fn seed(&self) -> u32 { self.seed }
+}
+
+impl Encryptor for PcCipher {
+    fn encrypt(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String> {
+        self.process(input, output)
+    }
+}
+
+impl Decryptor for PcCipher {
+    fn decrypt(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String> {
+        self.process(input, output)
     }
 }
 

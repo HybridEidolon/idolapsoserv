@@ -7,9 +7,8 @@ use std::borrow::Borrow;
 use std::thread;
 use std::string::ToString;
 
-use crypto::symmetriccipher::{Encryptor, Decryptor};
-
 use psocrypto::pc::PcCipher;
+use psocrypto::{Encryptor, Decryptor};
 
 use rand::random;
 

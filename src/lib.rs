@@ -1,5 +1,4 @@
 extern crate rand;
-extern crate crypto;
 extern crate psocrypto;
 extern crate byteorder;
 extern crate encoding;

@@ -4,7 +4,6 @@ version = "0.1.0"
 authors = ["Eidolon"]
 
 [dependencies]
-rust-crypto = "0.2.34"
 rand = "0.3.12"
 byteorder = "0.4.2"
 rustc-serialize = "0.3.16"

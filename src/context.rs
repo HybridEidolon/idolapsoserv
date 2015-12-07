@@ -3,7 +3,7 @@
 use std::io;
 use std::io::{Read, Write};
 
-use crypto::symmetriccipher::{Encryptor, Decryptor};
+use psocrypto::{Encryptor, Decryptor};
 
 use ::message::{MessageEncode, MessageDecode};
 

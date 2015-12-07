@@ -20,7 +20,7 @@ impl HdrSerial for HdrSerializer {
                 }
             }
             {
-                if let Err(e) = d.decrypt(&mut RefReadBuffer::new(&rbuf), &mut RefWriteBuffer::new(&mut ebuf), false) {
+                if let Err(e) = d.decrypt(&rbuf, &mut ebuf) {
                     return Err(io::Error::new(io::ErrorKind::Other, format!("Encryption failed: {:?}", e)))
                 }
             }
@@ -52,8 +52,7 @@ impl HdrSerial for HdrSerializer {
                 try!(cur.write_u16::<LittleEndian>(msg_type as u16));
             }
             {
-                if let Err(_) = e.encrypt(&mut RefReadBuffer::new(&wbuf),
-                    &mut RefWriteBuffer::new(&mut ebuf[..]), false) {
+                if let Err(_) = e.encrypt(&wbuf, &mut ebuf) {
                     return Err(io::Error::new(io::ErrorKind::Other, "encryption failed at header"))
                 }
             }

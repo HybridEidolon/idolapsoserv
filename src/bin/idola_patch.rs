@@ -1,8 +1,4 @@
 extern crate idola;
-// extern crate crypto;
-// extern crate psocrypto;
-// extern crate byteorder;
-// extern crate rand;
 #[macro_use] extern crate log;
 extern crate env_logger;
 
