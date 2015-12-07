@@ -105,7 +105,7 @@ impl Decryptor for BbCipher {
             } else { return Ok(()) }
             if let Ok(n) = ci.read_u32::<LittleEndian>() {
                 n2 = W(n)
-            } else { return Err("Invalid length".to_string()) }
+            } else { return Err(format!("Invalid length: expected 8 bytes, only read 4")) }
 
             n1 = n1 ^ W(self.keys[5]);
             tmp1 = (((W(self.keys[(n1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((n1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))

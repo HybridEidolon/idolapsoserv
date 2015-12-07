@@ -5,6 +5,8 @@ use std::io;
 
 use byteorder::{LittleEndian as LE, BigEndian as BE, ReadBytesExt, WriteBytesExt};
 
+pub static PSOBB_COPYRIGHT_STRING: &'static [u8] = b"Phantasy Star Online Blue Burst Game Server. Copyright 1999-2004 SONICTEAM.";
+
 pub trait Serial: Sized {
     fn serialize(&self, dst: &mut Write) -> io::Result<()>;
     fn deserialize(src: &mut Read) -> io::Result<Self>;
@@ -70,13 +72,14 @@ macro_rules! gen_message_enum {
                 let size = try!(src.read_u16::<LE>());
                 let msg_type = try!(src.read_u16::<LE>());
                 let flags = try!(src.read_u32::<LE>());
+                debug!("size: {size}, type: {msg_type}, flags: {flags}", size=size, msg_type=msg_type, flags=flags);
                 match msg_type {
                     $($id => Ok(Message::$name(flags, try!($name::deserialize(src)))),)*
                     a => {
                         use std::borrow::BorrowMut;
                         let mut buf = vec![0; size as usize - 8];
                         {
-                            if try!(src.read(buf.borrow_mut())) != size as usize - 8 {
+                            if try!(src.read(&mut buf)) != size as usize - 8 {
                                 return Err(io::Error::new(io::ErrorKind::Other,
                                     format!("expected {} bytes", size - 8)))
                             }
@@ -97,7 +100,10 @@ gen_message_enum! {
 pub struct Welcome(pub Vec<u8>, pub Vec<u8>);
 impl Serial for Welcome {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        try!(dst.write_all(b"Phantasy Star Online Blue Burst Game Server. Copyright 1999-2004 SONICTEAM."));
+        let padding = vec![0u8; 0x60 - PSOBB_COPYRIGHT_STRING.len()];
+        assert_eq!(0x60, PSOBB_COPYRIGHT_STRING.len() + padding.len());
+        try!(dst.write_all(PSOBB_COPYRIGHT_STRING));
+        try!(dst.write_all(&padding[..]));
         try!(dst.write_all(&self.0[..]));
         try!(dst.write_all(&self.1[..]));
         Ok(())
