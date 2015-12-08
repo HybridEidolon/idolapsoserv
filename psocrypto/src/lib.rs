@@ -1,5 +1,6 @@
 extern crate byteorder;
 extern crate encoding;
+#[macro_use] extern crate log;
 
 use std::io::{Read, Write};
 use std::io;

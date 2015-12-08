@@ -6,3 +6,4 @@ authors = ["Eidolon"]
 [dependencies]
 byteorder = "0.4.2"
 encoding = "0.2.32"
+log = "0.3.4"

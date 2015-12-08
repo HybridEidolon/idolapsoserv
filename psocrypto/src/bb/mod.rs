@@ -4,10 +4,6 @@ use ::{Decryptor, Encryptor};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-mod table;
-
-pub use self::table::BB_TABLE;
-
 /// A cipher struct for encrypting and decrypting data using Blue Burst's
 /// encryption algorithm. This is not a stream cipher.
 pub struct BbCipher {
@@ -16,13 +12,22 @@ pub struct BbCipher {
 }
 
 impl BbCipher {
-    /// Create a new BbCipher with the given seed.
-    pub fn new(seed: &[u8]) -> Self {
-        let mut keys = vec![0; 1042];
+    /// Create a new BbCipher with the given seed and key table.
+    ///
+    /// The table is a random hash of u32 values that is stored inside the PSOBB
+    /// client. In the source of this project, the one used for the Tethealla
+    /// EXEs is at data/crypto/bb_table.bin. This must be exactly 1042 u32s long,
+    /// or 4168 bytes; the table argument should also be 1042 u32s long.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if table is not 1042 elements long, or if seed is
+    /// not 48 elements long.
+    pub fn new(seed: &[u8], table: &[u32]) -> Self {
+        assert_eq!(table.len(), 1042);
 
-        setup_cryptosetup_bb(&mut keys, seed);
         BbCipher {
-            keys: keys,
+            keys: setup_cryptosetup_bb(seed, table),
             seed: seed.to_vec()
         }
     }
@@ -31,55 +36,82 @@ impl BbCipher {
     pub fn get_seed<'a>(&'a self) -> &'a[u8] {
         &self.seed
     }
+
+    pub fn get_keys<'a>(&'a self) -> &'a[u32] {
+        &self.keys
+    }
 }
 
 impl Encryptor for BbCipher {
     fn encrypt(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String> {
         use std::num::Wrapping as W;
+        let mut ebx: W<u32>;
+        let mut ebp: W<u32>;
+        let mut esi: W<u32>;
+        let mut edi: W<u32>;
+        let mut tmp: W<u32>;
 
         let mut ci = Cursor::new(input);
         let mut co = Cursor::new(output);
 
         // Operate on 2 u32 at a time
         loop {
-            let mut n1: W<u32>;
-            let n2: W<u32>;
-            let mut tmp1: W<u32>;
-            let mut tmp2: W<u32>;
-            let tmp3: W<u32>;
-
             if let Ok(n) = ci.read_u32::<LittleEndian>() {
-                n1 = W(n)
+                ebx = W(n)
             } else { return Ok(()) }
             if let Ok(n) = ci.read_u32::<LittleEndian>() {
-                n2 = W(n)
-            } else { return Err("Buffer length not multiple of 8.".to_string()) }
+                tmp = W(n)
+            } else { return Err(format!("Invalid length: expected 8 bytes, only read 4")) }
 
-            n1 = n1 ^ W(self.keys[0]);
-            tmp1 = (((W(self.keys[(n1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((n1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))
-                    ^ W(self.keys[(((n1 >> 0x8) & W(0xFF)) + W(0x212)).0 as usize])) + W(self.keys[((n1 & W(0xFF)) + W(0x312)).0 as usize]);
-            tmp1 = tmp1 ^ W(self.keys[1]);
-            tmp1 = tmp1 ^ n2;
+            ebx = ebx ^ W(self.keys[0]);
+            ebp = {
+                let a = W(self.keys[((ebx >> 0x18) + W(0x12)).0 as usize]);
+                let b = W(self.keys[(((ebx >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]);
+                let c = W(self.keys[(((ebx >> 0x8) & W(0xFF)) + W(0x212)).0 as usize]);
+                let d = W(self.keys[((ebx & W(0xFF)) + W(0x312)).0 as usize]);
 
-            tmp2 = (((W(self.keys[(tmp1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((tmp1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))
-                    ^ W(self.keys[(((tmp1 >> 0x8) & W(0xFF)) + W(0x212)).0 as usize])) + W(self.keys[((tmp1 & W(0xFF)) + W(0x312)).0 as usize]);
-            tmp2 = tmp2 ^ W(self.keys[2]);
-            n1 = n1 ^ tmp2;
-            tmp3 = (((W(self.keys[(n1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((n1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))
-                    ^ W(self.keys[(((n1 >> 0x8) & W(0xFF)) + W(0x212)).0 as usize])) + W(self.keys[((n1 & W(0xFF)) + W(0x312)).0 as usize]);
-            tmp1 = tmp1 ^ tmp3 ^ W(self.keys[3]);
-            tmp2 = (((W(self.keys[(tmp1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((tmp1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))
-                    ^ W(self.keys[(((tmp1 >> 0x8) & W(0xFF)) + W(0x212)).0 as usize])) + W(self.keys[((tmp1 & W(0xFF)) + W(0x312)).0 as usize]);
-            tmp2 = tmp2 ^ W(self.keys[4]);
-            tmp1 = tmp1 ^ W(self.keys[5]);
-            n1 = n1 ^ tmp2;
+                ((a + b) ^ c) + d
+            };
+            ebp = ebp ^ W(self.keys[1]);
+            ebp = ebp ^ tmp;
+
+            edi = {
+                let a = W(self.keys[((ebp >> 0x18) + W(0x12)).0 as usize]);
+                let b = W(self.keys[(((ebp >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]);
+                let c = W(self.keys[(((ebp >> 0x8) & W(0xFF)) + W(0x212)).0 as usize]);
+                let d = W(self.keys[((ebp & W(0xFF)) + W(0x312)).0 as usize]);
+
+                ((a + b) ^ c) + d
+            };
+            edi = edi ^ W(self.keys[2]);
+            ebx = ebx ^ edi;
+            esi = {
+                let a = W(self.keys[((ebx >> 0x18) + W(0x12)).0 as usize]);
+                let b = W(self.keys[(((ebx >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]);
+                let c = W(self.keys[(((ebx >> 0x8) & W(0xFF)) + W(0x212)).0 as usize]);
+                let d = W(self.keys[((ebx & W(0xFF)) + W(0x312)).0 as usize]);
+
+                ((a + b) ^ c) + d
+            };
+            ebp = ebp ^ esi ^ W(self.keys[3]);
+            edi = {
+                let a = W(self.keys[((ebp >> 0x18) + W(0x12)).0 as usize]);
+                let b = W(self.keys[(((ebp >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]);
+                let c = W(self.keys[(((ebp >> 0x8) & W(0xFF)) + W(0x212)).0 as usize]);
+                let d = W(self.keys[((ebp & W(0xFF)) + W(0x312)).0 as usize]);
+
+                ((a + b) ^ c) + d
+            };
+            edi = edi ^ W(self.keys[4]);
+            ebp = ebp ^ W(self.keys[5]);
+            ebx = ebx ^ edi;
 
             // Write phase
-            if let Err(_) = co.write_u32::<LittleEndian>(tmp1.0) {
-                return Ok(())
+            if let Err(_) = co.write_u32::<LittleEndian>(ebp.0) {
+                return Err("Output buffer is not big enough".to_string())
             }
-            if let Err(_) = co.write_u32::<LittleEndian>(n1.0) {
-                return Err("Output buffer not multiple of 8.".to_string())
+            if let Err(_) = co.write_u32::<LittleEndian>(ebx.0) {
+                return Err("Output buffer is not big enough".to_string())
             }
         }
     }
@@ -88,49 +120,72 @@ impl Encryptor for BbCipher {
 impl Decryptor for BbCipher {
     fn decrypt(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String> {
         use std::num::Wrapping as W;
+        let mut ebx: W<u32>;
+        let mut ebp: W<u32>;
+        let mut esi: W<u32>;
+        let mut edi: W<u32>;
+        let mut tmp: W<u32>;
 
         let mut ci = Cursor::new(input);
         let mut co = Cursor::new(output);
 
         // Operate on 2 u32 at a time
         loop {
-            let mut n1: W<u32>;
-            let n2: W<u32>;
-            let mut tmp1: W<u32>;
-            let mut tmp2: W<u32>;
-            let tmp3: W<u32>;
-
             if let Ok(n) = ci.read_u32::<LittleEndian>() {
-                n1 = W(n)
+                ebx = W(n)
             } else { return Ok(()) }
             if let Ok(n) = ci.read_u32::<LittleEndian>() {
-                n2 = W(n)
+                tmp = W(n)
             } else { return Err(format!("Invalid length: expected 8 bytes, only read 4")) }
 
-            n1 = n1 ^ W(self.keys[5]);
-            tmp1 = (((W(self.keys[(n1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((n1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))
-                    ^ W(self.keys[(((n1 >> 0x8) & W(0xFF)) + W(0x212)).0 as usize])) + W(self.keys[((n1 & W(0xFF)) + W(0x312)).0 as usize]);
-            tmp1 = tmp1 ^ W(self.keys[4]);
-            tmp1 = tmp1 ^ n2;
+            ebx = ebx ^ W(self.keys[5]);
+            ebp = {
+                let a = W(self.keys[((ebx >> 0x18) + W(0x12)).0 as usize]);
+                let b = W(self.keys[(((ebx >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]);
+                let c = W(self.keys[(((ebx >> 0x8) & W(0xFF)) + W(0x212)).0 as usize]);
+                let d = W(self.keys[((ebx & W(0xFF)) + W(0x312)).0 as usize]);
 
-            tmp2 = (((W(self.keys[(tmp1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((tmp1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))
-                    ^ W(self.keys[(((tmp1 >> 0x8) & W(0xFF)) + W(0x212)).0 as usize])) + W(self.keys[((tmp1 & W(0xFF)) + W(0x312)).0 as usize]);
-            tmp2 = tmp2 ^ W(self.keys[3]);
-            n1 = n1 ^ tmp2;
-            tmp3 = (((W(self.keys[(n1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((n1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))
-                    ^ W(self.keys[(((n1 >> 0x8) & W(0xFF)) + W(0x212)).0 as usize])) + W(self.keys[((n1 & W(0xFF)) + W(0x312)).0 as usize]);
-            tmp1 = tmp1 ^ tmp3 ^ W(self.keys[2]);
-            tmp2 = (((W(self.keys[(tmp1 >> 0x18).0 as usize]) + W(0x12)) + W(self.keys[(((tmp1 >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]))
-                    ^ W(self.keys[(((tmp1 >> 0x8) & W(0xFF)) + W(0x212)).0 as usize])) + W(self.keys[((tmp1 & W(0xFF)) + W(0x312)).0 as usize]);
-            tmp2 = tmp2 ^ W(self.keys[1]);
-            tmp1 = tmp1 ^ W(self.keys[0]);
-            n1 = n1 ^ tmp2;
+                ((a + b) ^ c) + d
+            };
+            ebp = ebp ^ W(self.keys[4]);
+            ebp = ebp ^ tmp;
+
+            edi = {
+                let a = W(self.keys[((ebp >> 0x18) + W(0x12)).0 as usize]);
+                let b = W(self.keys[(((ebp >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]);
+                let c = W(self.keys[(((ebp >> 0x8) & W(0xFF)) + W(0x212)).0 as usize]);
+                let d = W(self.keys[((ebp & W(0xFF)) + W(0x312)).0 as usize]);
+
+                ((a + b) ^ c) + d
+            };
+            edi = edi ^ W(self.keys[3]);
+            ebx = ebx ^ edi;
+            esi = {
+                let a = W(self.keys[((ebx >> 0x18) + W(0x12)).0 as usize]);
+                let b = W(self.keys[(((ebx >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]);
+                let c = W(self.keys[(((ebx >> 0x8) & W(0xFF)) + W(0x212)).0 as usize]);
+                let d = W(self.keys[((ebx & W(0xFF)) + W(0x312)).0 as usize]);
+
+                ((a + b) ^ c) + d
+            };
+            ebp = ebp ^ esi ^ W(self.keys[2]);
+            edi = {
+                let a = W(self.keys[((ebp >> 0x18) + W(0x12)).0 as usize]);
+                let b = W(self.keys[(((ebp >> 0x10) & W(0xFF)) + W(0x112)).0 as usize]);
+                let c = W(self.keys[(((ebp >> 0x8) & W(0xFF)) + W(0x212)).0 as usize]);
+                let d = W(self.keys[((ebp & W(0xFF)) + W(0x312)).0 as usize]);
+
+                ((a + b) ^ c) + d
+            };
+            edi = edi ^ W(self.keys[1]);
+            ebp = ebp ^ W(self.keys[0]);
+            ebx = ebx ^ edi;
 
             // Write phase
-            if let Err(_) = co.write_u32::<LittleEndian>(tmp1.0) {
-                return Ok(())
+            if let Err(_) = co.write_u32::<LittleEndian>(ebp.0) {
+                return Err("Output buffer is not big enough".to_string())
             }
-            if let Err(_) = co.write_u32::<LittleEndian>(n1.0) {
+            if let Err(_) = co.write_u32::<LittleEndian>(ebx.0) {
                 return Err("Output buffer is not big enough".to_string())
             }
         }
@@ -139,29 +194,33 @@ impl Decryptor for BbCipher {
 
 /// Generates the key vector for Blue Burst encryption.
 /// Taken from Sylverant. Holy hell, I'm pretty sure this is just verbatim disassembly.
-pub fn setup_cryptosetup_bb(keys: &mut [u32], salt: &[u8]) {
-    use std::num::Wrapping;
+///
+/// Keys should already be populated with a binary key table from the client. It will
+/// be changed with the seed.
+///
+/// This is quite possibly the worst Rust code ever written.
+pub fn setup_cryptosetup_bb(salt: &[u8], bbtable: &[u32]) -> Vec<u32> {
     use std::num::Wrapping as W;
-    let mut eax: Wrapping<u32>;
-    let mut ecx: Wrapping<u32>;
-    let mut edx: Wrapping<u32>;
-    let mut ebx: Wrapping<u32>;
-    let mut ebp: Wrapping<u32>;
-    let mut esi: Wrapping<u32>;
-    let mut edi: Wrapping<u32>;
-    let mut ou: Wrapping<u32>;
+    let mut eax: W<u32>;
+    let mut ecx: W<u32>;
+    let mut edx: W<u32>;
+    let mut ebx: W<u32>;
+    let mut ebp: W<u32>;
+    let mut esi: W<u32>;
+    let mut edi: W<u32>;
+    let mut ou: W<u32>;
 
-    let mut s = [W(0u8); 48];
+    let mut keys = vec![0u32; 1042];
 
-    if salt.len() != 48 {
-        panic!("The seed needs to be 48 bytes long: got {}", salt.len());
-    }
-    for (i, x) in salt.iter().enumerate() {
-        s[i] = W(*x)
-    }
+    assert_eq!(48, salt.len());
+    assert_eq!(1042, keys.len());
+    assert_eq!(1042, bbtable.len());
+    let mut s: Vec<W<u8>> = salt.iter().map(|b| W(*b)).collect();
 
+    // L_CRYPT_BB_InitKey
     {
         let mut i = 0;
+        // We could replace this with .step_by once that becomes stable.
         while i < 48 {
             s[i] = s[i] ^ W(0x19u8);
             s[i + 1] = s[i + 1] ^ W(0x16u8);
@@ -170,49 +229,53 @@ pub fn setup_cryptosetup_bb(keys: &mut [u32], salt: &[u8]) {
         }
     }
 
-    keys[0] = 0x243F6A88;
-    keys[1] = 0x85A308D3;
-    keys[2] = 0x13198A2E;
-    keys[3] = 0x03707344;
-    keys[4] = 0xA4093822;
-    keys[5] = 0x299F31D0;
-    keys[6] = 0x082EFA98;
-    keys[7] = 0xEC4E6C89;
-    keys[8] = 0x452821E6;
-    keys[9] = 0x38D01377;
-    keys[10] = 0xBE5466CF;
-    keys[11] = 0x34E90C6C;
-    keys[12] = 0xC0AC29B7;
-    keys[13] = 0xC97C50DD;
-    keys[14] = 0x3F84D5B5;
-    keys[15] = 0xB5470917;
-    keys[16] = 0x9216D5D9;
-    keys[17] = 0x8979FB1B;
+    // this is some hot garbage
+    unsafe {
+        use std::mem;
 
-    for (i, x) in BB_TABLE[..].iter().enumerate() {
-        keys[18+i] = *x as u32;
+        let pcryp: *mut u16 = mem::transmute(&mut keys[0]);
+        let bbtbl: *const u16 = mem::transmute(&bbtable[0]);
+        let mut eax: u16 = 0;
+        let mut ebx: u16 = 0;
+        let mut dx: u16;
+        for _ in 0..0x12 {
+            dx = *bbtbl.offset(eax as isize);
+            eax += 1;
+            dx = ((dx & 0xFF) << 8) + (dx >> 8);
+            *pcryp.offset(ebx as isize) = dx;
+            dx = *bbtbl.offset(eax as isize);
+            eax += 1;
+            dx ^= *pcryp.offset(ebx as isize);
+            ebx += 1;
+            *pcryp.offset(ebx as isize) = dx;
+            ebx += 1;
+        }
+    }
+    // our saved key binaries should already have this set up. (SEGA BB keys AND teth)
+    for i in 18..(1024 + 18) {
+        keys[i] = bbtable[i];
     }
 
-    ecx = Wrapping(0);
-    ebx = Wrapping(0);
+    ecx = W(0);
+    ebx = W(0);
 
     while ebx < W(0x12) {
         ebp = W(s[ecx.0 as usize].0 as u32) << 0x18;
         eax = ecx + W(1);
-        edx = eax - ((eax / W(48))*W(48));
+        edx = eax - ((eax / W(48)) * W(48));
         eax = (W(s[edx.0 as usize].0 as u32) << 0x10) & W(0xFF0000);
-        ebp = (ebp | eax) & W(0xffff00ff);
+        ebp = (ebp | eax) & W(0xFFFF00FF);
         eax = ecx + W(2);
-        edx = eax - ((eax / W(48))*W(48));
+        edx = eax - ((eax / W(48)) * W(48));
         eax = (W(s[edx.0 as usize].0 as u32) << 0x8) & W(0xFF00);
-        ebp = (ebp | eax) & W(0xffffff00);
+        ebp = (ebp | eax) & W(0xFFFFFF00);
         eax = ecx + W(3);
         ecx = ecx + W(4);
-        edx = eax - ((eax / W(48))*W(48));
+        edx = eax - ((eax / W(48)) * W(48));
         eax = W(s[edx.0 as usize].0 as u32);
         ebp = ebp | eax;
         eax = ecx;
-        edx = eax - ((eax / W(48))*W(48));
+        edx = eax - ((eax / W(48)) * W(48));
         keys[ebx.0 as usize] = (W(keys[ebx.0 as usize]) ^ ebp).0;
         ecx = edx;
         ebx = ebx + W(1);
@@ -228,151 +291,223 @@ pub fn setup_cryptosetup_bb(keys: &mut [u32], salt: &[u8]) {
     while edi < edx {
         esi = esi ^ W(keys[0]);
         eax = esi >> 0x18;
-        ebx = (esi >> 0x10) & W(0xff);
-        eax = W(keys[eax.0 as usize+0x12]) + W(keys[ebx.0 as usize+0x112]);
+        ebx = (esi >> 0x10) & W(0xFF);
+        eax = W(keys[(eax + W(0x12)).0 as usize]) + W(keys[(ebx + W(0x112)).0 as usize]);
         ebx = (esi >> 8) & W(0xFF);
-        eax = eax ^ W(keys[ebx.0 as usize+0x212]);
-        ebx = esi & W(0xff);
-        eax = eax + W(keys[ebx.0 as usize+0x312]);
+        eax = eax ^ W(keys[(ebx + W(0x212)).0 as usize]);
+        ebx = esi & W(0xFF);
+        eax = eax + W(keys[(ebx + W(0x312)).0 as usize]);
 
         eax = eax ^ W(keys[1]);
         ecx = ecx ^ eax;
         ebx = ecx >> 0x18;
         eax = (ecx >> 0x10) & W(0xFF);
-        ebx = W(keys[ebx.0 as usize+0x12]) + W(keys[eax.0 as usize+0x112]);
-        eax = (ecx >> 8) & W(0xff);
-        ebx = ebx ^ W(keys[eax.0 as usize+0x212]);
-        eax = ecx & W(0xff);
-        ebx = ebx + W(keys[eax.0 as usize+0x312]);
+        ebx = W(keys[(ebx + W(0x12)).0 as usize]) + W(keys[(eax + W(0x112)).0 as usize]);
+        eax = (ecx >> 8) & W(0xFF);
+        ebx = ebx ^ W(keys[(eax + W(0x212)).0 as usize]);
+        eax = ecx & W(0xFF);
+        ebx = ebx + W(keys[(eax + W(0x312)).0 as usize]);
 
-        for x in 0..6 {
-            ebx = ebx ^ W(keys[(x*2)+2]);
+        for index in 0..6 {
+            ebx = ebx ^ W(keys[(index*2)+2]);
             esi = esi ^ ebx;
             ebx = esi >> 0x18;
             eax = (esi >> 0x10) & W(0xFF);
-            ebx = W(keys[ebx.0 as usize+0x12]) + W(keys[eax.0 as usize+0x112]);
-            eax = (esi >> 8) & W(0xff);
-            ebx = ebx ^ W(keys[eax.0 as usize+0x212]);
-            eax=esi & W(0xff);
-            ebx=ebx + W(keys[eax.0 as usize+0x312]);
+            ebx = W(keys[(ebx + W(0x12)).0 as usize]) + W(keys[(eax + W(0x112)).0 as usize]);
+            eax = (esi >> 8) & W(0xFF);
+            ebx = ebx ^ W(keys[(eax + W(0x212)).0 as usize]);
+            eax = esi & W(0xFF);
+            ebx = ebx + W(keys[(eax + W(0x312)).0 as usize]);
 
-            ebx=ebx ^ W(keys[(x*2)+3]);
-            ecx= ecx ^ ebx;
-            ebx=ecx >> 0x18;
-            eax=(ecx >> 0x10) & W(0xFF);
-            ebx=W(keys[ebx.0 as usize+0x12]) + W(keys[eax.0 as usize+0x112]);
-            eax=(ecx >> 8) & W(0xff);
-            ebx=ebx ^ W(keys[eax.0 as usize+0x212]);
-            eax=ecx & W(0xff);
-            ebx=ebx + W(keys[eax.0 as usize+0x312]);
+            ebx=ebx ^ W(keys[(index*2)+3]);
+            ecx = ecx ^ ebx;
+            ebx = ecx >> 0x18;
+            eax = (ecx >> 0x10) & W(0xFF);
+            ebx = W(keys[(ebx + W(0x12)).0 as usize]) + W(keys[(eax + W(0x112)).0 as usize]);
+            eax = (ecx >> 8) & W(0xFF);
+            ebx = ebx ^ W(keys[(eax + W(0x212)).0 as usize]);
+            eax = ecx & W(0xFF);
+            ebx = ebx + W(keys[(eax + W(0x312)).0 as usize]);
         }
 
-        ebx=ebx ^ W(keys[14]);
-        esi= esi ^ ebx;
-        eax=esi >> 0x18;
-        ebx=(esi >> 0x10) & W(0xFF);
-        eax=W(keys[eax.0 as usize+0x12]) + W(keys[ebx.0 as usize+0x112]);
-        ebx=(esi >> 8) & W(0xff);
-        eax=eax ^ W(keys[ebx.0 as usize+0x212]);
-        ebx=esi & W(0xff);
-        eax=eax + W(keys[ebx.0 as usize+0x312]);
+        ebx = ebx ^ W(keys[14]);
+        esi = esi ^ ebx;
+        eax = esi >> 0x18;
+        ebx = (esi >> 0x10) & W(0xFF);
+        eax = W(keys[(eax + W(0x12)).0 as usize]) + W(keys[(ebx + W(0x112)).0 as usize]);
+        ebx = (esi >> 8) & W(0xFF);
+        eax = eax ^ W(keys[(ebx + W(0x212)).0 as usize]);
+        ebx = esi & W(0xFF);
+        eax = eax + W(keys[(ebx + W(0x312)).0 as usize]);
 
-        eax=eax ^ W(keys[15]);
-        eax= ecx ^ eax;
-        ecx=eax >> 0x18;
-        ebx=(eax >> 0x10) & W(0xFF);
-        ecx=W(keys[ecx.0 as usize+0x12]) + W(keys[ebx.0 as usize+0x112]);
-        ebx=(eax >> 8) & W(0xff);
-        ecx=ecx ^ W(keys[ebx.0 as usize+0x212]);
-        ebx=eax & W(0xff);
-        ecx=ecx + W(keys[ebx.0 as usize+0x312]);
+        eax = eax ^ W(keys[15]);
+        eax = ecx ^ eax;
+        ecx = eax >> 0x18;
+        ebx = (eax >> 0x10) & W(0xFF);
+        ecx = W(keys[(ecx + W(0x12)).0 as usize]) + W(keys[(ebx + W(0x112)).0 as usize]);
+        ebx = (eax >> 8) & W(0xFF);
+        ecx = ecx ^ W(keys[(ebx + W(0x212)).0 as usize]);
+        ebx = eax & W(0xFF);
+        ecx = ecx + W(keys[(ebx + W(0x312)).0 as usize]);
 
-        ecx=ecx ^ W(keys[16]);
-        ecx=ecx ^ esi;
-        esi= W(keys[17]);
-        esi=esi ^ eax;
-        keys[(edi.0 as usize / 4)]=esi.0;
-        keys[(edi.0 as usize / 4)+1]=ecx.0;
-        edi=edi+W(8);
+        ecx = ecx ^ W(keys[16]);
+        ecx = ecx ^ esi;
+        esi = W(keys[17]);
+        esi = esi ^ eax;
+        keys[(edi / W(4)).0 as usize] = esi.0;
+        keys[((edi / W(4)) + W(1)).0 as usize] = ecx.0;
+        edi = edi + W(8);
     }
 
-    //eax=W(0);
-    //edx=W(0);
-    ou=W(0);
+    //eax = W(0);
+    //edx = W(0);
+
+    ou = W(0);
     while ou < W(0x1000) {
-        edi=W(0x48);
-        edx=W(0x448);
+        edi = W(0x48);
+        edx = W(0x448);
 
         while edi < edx {
-            esi=esi ^ W(keys[0]);
-            eax=esi >> 0x18;
-            ebx=(esi >> 0x10) & W(0xff);
-            eax=W(keys[eax.0 as usize+0x12]) + W(keys[ebx.0 as usize+0x112]);
-            ebx=(esi >> 8) & W(0xFF);
-            eax=eax ^ W(keys[ebx.0 as usize+0x212]);
-            ebx=esi & W(0xff);
-            eax=eax + W(keys[ebx.0 as usize+0x312]);
+            esi = esi ^ W(keys[0]);
+            eax = esi >> 0x18;
+            ebx = (esi >> 0x10) & W(0xFF);
+            eax = W(keys[(eax + W(0x12)).0 as usize]) + W(keys[(ebx + W(0x112)).0 as usize]);
+            ebx = (esi >> 8) & W(0xFF);
+            eax = eax ^ W(keys[(ebx + W(0x212)).0 as usize]);
+            ebx = esi & W(0xFF);
+            eax = eax + W(keys[(ebx + W(0x312)).0 as usize]);
 
-            eax=eax ^ W(keys[1]);
-            ecx= ecx ^ eax;
-            ebx=ecx >> 0x18;
-            eax=(ecx >> 0x10) & W(0xFF);
-            ebx=W(keys[ebx.0 as usize+0x12]) + W(keys[eax.0 as usize+0x112]);
-            eax=(ecx >> 8) & W(0xff);
-            ebx=ebx ^ W(keys[eax.0 as usize+0x212]);
-            eax=ecx & W(0xff);
-            ebx=ebx + W(keys[eax.0 as usize+0x312]);
+            eax = eax ^ W(keys[1]);
+            ecx = ecx ^ eax;
+            ebx = ecx >> 0x18;
+            eax = (ecx >> 0x10) & W(0xFF);
+            ebx = W(keys[(ebx + W(0x12)).0 as usize]) + W(keys[(eax + W(0x112)).0 as usize]);
+            eax = (ecx >> 8) & W(0xFF);
+            ebx = ebx ^ W(keys[(eax + W(0x212)).0 as usize]);
+            eax = ecx & W(0xFF);
+            ebx = ebx + W(keys[(eax + W(0x312)).0 as usize]);
 
-            for x in 0..6 {
-                ebx=ebx ^ W(keys[(x*2)+2]);
-                esi= esi ^ ebx;
-                ebx=esi >> 0x18;
-                eax=(esi >> 0x10) & W(0xFF);
-                ebx=W(keys[ebx.0 as usize+0x12]) + W(keys[eax.0 as usize+0x112]);
-                eax=(esi >> 8) & W(0xff);
-                ebx=ebx ^ W(keys[eax.0 as usize+0x212]);
-                eax=esi & W(0xff);
-                ebx=ebx + W(keys[eax.0 as usize+0x312]);
+            for index in 0..6 {
+                ebx = ebx ^ W(keys[(index*2)+2]);
+                esi = esi ^ ebx;
+                ebx = esi >> 0x18;
+                eax = (esi >> 0x10) & W(0xFF);
+                ebx = W(keys[(ebx + W(0x12)).0 as usize]) + W(keys[(eax + W(0x112)).0 as usize]);
+                eax = (esi >> 8) & W(0xFF);
+                ebx = ebx ^ W(keys[(eax + W(0x212)).0 as usize]);
+                eax = esi & W(0xFF);
+                ebx = ebx + W(keys[(eax + W(0x312)).0 as usize]);
 
-                ebx=ebx ^ W(keys[(x*2)+3]);
-                ecx= ecx ^ ebx;
-                ebx=ecx >> 0x18;
-                eax=(ecx >> 0x10) & W(0xFF);
-                ebx=W(keys[ebx.0 as usize+0x12]) + W(keys[eax.0 as usize+0x112]);
-                eax=(ecx >> 8) & W(0xff);
-                ebx=ebx ^ W(keys[eax.0 as usize+0x212]);
-                eax=ecx & W(0xff);
-                ebx=ebx + W(keys[eax.0 as usize+0x312]);
+                ebx = ebx ^ W(keys[(index*2)+3]);
+                ecx = ecx ^ ebx;
+                ebx = ecx >> 0x18;
+                eax = (ecx >> 0x10) & W(0xFF);
+                ebx = W(keys[(ebx + W(0x12)).0 as usize]) + W(keys[(eax + W(0x112)).0 as usize]);
+                eax = (ecx >> 8) & W(0xFF);
+                ebx = ebx ^ W(keys[(eax + W(0x212)).0 as usize]);
+                eax = ecx & W(0xFF);
+                ebx = ebx + W(keys[(eax + W(0x312)).0 as usize]);
             }
 
-            ebx=ebx ^ W(keys[14]);
-            esi= esi ^ ebx;
-            eax=esi >> 0x18;
-            ebx=(esi >> 0x10) & W(0xFF);
-            eax=W(keys[eax.0 as usize+0x12]) + W(keys[ebx.0 as usize+0x112]);
-            ebx=(esi >> 8) & W(0xff);
-            eax=eax ^ W(keys[ebx.0 as usize+0x212]);
-            ebx=esi & W(0xff);
-            eax=eax + W(keys[ebx.0 as usize+0x312]);
+            ebx = ebx ^ W(keys[14]);
+            esi = esi ^ ebx;
+            eax = esi >> 0x18;
+            ebx = (esi >> 0x10) & W(0xFF);
+            eax = W(keys[(eax + W(0x12)).0 as usize]) + W(keys[(ebx + W(0x112)).0 as usize]);
+            ebx = (esi >> 8) & W(0xFF);
+            eax = eax ^ W(keys[(ebx + W(0x212)).0 as usize]);
+            ebx = esi & W(0xFF);
+            eax = eax + W(keys[(ebx + W(0x312)).0 as usize]);
 
-            eax=eax ^ W(keys[15]);
-            eax= ecx ^ eax;
-            ecx=eax >> 0x18;
-            ebx=(eax >> 0x10) & W(0xFF);
-            ecx=W(keys[ecx.0 as usize+0x12]) + W(keys[ebx.0 as usize+0x112]);
-            ebx=(eax >> 8) & W(0xff);
-            ecx=ecx ^ W(keys[ebx.0 as usize+0x212]);
-            ebx=eax & W(0xff);
-            ecx=ecx + W(keys[ebx.0 as usize+0x312]);
+            eax = eax ^ W(keys[15]);
+            eax = ecx ^ eax;
+            ecx = eax >> 0x18;
+            ebx = (eax >> 0x10) & W(0xFF);
+            ecx = W(keys[(ecx + W(0x12)).0 as usize]) + W(keys[(ebx + W(0x112)).0 as usize]);
+            ebx = (eax >> 8) & W(0xFF);
+            ecx = ecx ^ W(keys[(ebx + W(0x212)).0 as usize]);
+            ebx = eax & W(0xFF);
+            ecx = ecx + W(keys[(ebx + W(0x312)).0 as usize]);
 
-            ecx=ecx ^ W(keys[16]);
-            ecx=ecx ^ esi;
-            esi= W(keys[17]);
-            esi=esi ^ eax;
-            keys[(ou.0 as usize / 4)+(edi.0 as usize / 4)]=esi.0;
-            keys[(ou.0 as usize / 4)+(edi.0 as usize / 4)+1]=ecx.0;
-            edi=edi+W(8);
+            ecx = ecx ^ W(keys[16]);
+            ecx = ecx ^ esi;
+            esi = W(keys[17]);
+            esi = esi ^ eax;
+            keys[((ou / W(4)) + (edi / W(4))).0 as usize] = esi.0;
+            keys[((ou / W(4)) + (edi / W(4)) + W(1)).0 as usize] = ecx.0;
+            edi = edi + W(8);
         }
-        ou=ou+W(0x400);
+        ou = ou + W(0x400);
+    };
+    keys
+}
+
+#[cfg(test)]
+mod test {
+    use std::fs::File;
+    use super::BbCipher;
+    use ::Encryptor;
+    use ::Decryptor;
+    use std::io;
+    use std::io::{Cursor, Read};
+    use byteorder::*;
+
+    fn read_key_table(mut f: File) -> io::Result<Vec<u32>> {
+
+        // let metadata = try!(f.metadata());
+        // if metadata.len() != 1042 * 4 {
+        //     return Err(io::Error::new(io::ErrorKind::Other, "key table is not correct size"))
+        // }
+
+        //drop(metadata);
+        let mut data = Vec::with_capacity(1042 * 4);
+        try!(f.read_to_end(&mut data));
+        let mut key_table: Vec<u32> = Vec::with_capacity(1042);
+        let mut cur = Cursor::new(data);
+        loop {
+            use byteorder::{LittleEndian, ReadBytesExt};
+            match cur.read_u32::<LittleEndian>() {
+                Err(_) => break,
+                Ok(n) => key_table.push(n)
+            }
+        }
+        Ok(key_table)
+    }
+
+    #[test]
+    fn test_cipher_symmetry() {
+        let table = read_key_table(File::open("test/bb_table.bin").unwrap()).unwrap();
+        let mut cipher = BbCipher::new(&vec![0u8; 48], &table);
+
+        let mut in_buffer: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let expect = in_buffer.clone();
+        let mut out_buffer = vec![0u8; 8];
+
+        cipher.encrypt(&in_buffer, &mut out_buffer).unwrap();
+        cipher.decrypt(&out_buffer, &mut in_buffer).unwrap();
+        assert_eq!(in_buffer, expect);
+    }
+
+    #[test]
+    fn test_real_header() {
+        let incoming: Vec<u8> = vec![179, 239, 115, 210, 246, 22, 169, 122];
+        let expected: Vec<u8> = vec![180, 0, 0x93, 0];
+
+        let table = read_key_table(File::open("test/bb_table.bin").unwrap()).unwrap();
+        let mut cipher = BbCipher::new(&vec![0u8; 48], &table);
+        let mut decrypted = vec![0u8; 8];
+
+        cipher.decrypt(&incoming, &mut decrypted).unwrap();
+        assert_eq!(decrypted[0..4], expected[0..4]);
+    }
+
+    #[test]
+    fn test_zero_seed_cipher_gen() {
+        let table = read_key_table(File::open("test/bb_table.bin").unwrap()).unwrap();
+        let zero_table = read_key_table(File::open("test/zero_table.bin").unwrap()).unwrap();
+
+        let cipher = BbCipher::new(&vec![0u8; 48], &table);
+        assert_eq!(cipher.get_keys().len(), zero_table.len());
+        assert_eq!(cipher.get_keys()[..], zero_table[..]);
     }
 }
