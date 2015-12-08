@@ -42,6 +42,7 @@ macro_rules! gen_message_enum {
                 let msg_type: u16;
                 let size: u16;
                 let flags: u32;
+                debug!("Serializing message");
                 {
                     let mut cur = Cursor::new(buf);
                     match self {
@@ -59,11 +60,24 @@ macro_rules! gen_message_enum {
                     size = cur.position() as u16;
                     buf = cur.into_inner();
                 }
-                try!(dst.write_u16::<LE>(size + 8));
-                try!(dst.write_u16::<LE>(msg_type));
-                try!(dst.write_u32::<LE>(flags));
-                let (buf_slice, _) = buf.split_at(size as usize);
-                try!(dst.write_all(buf_slice));
+                debug!("Serializing header");
+                let hdr_buf;
+                {
+                    let mut curs = Cursor::new(Vec::with_capacity(8));
+                    try!(curs.write_u16::<LE>(size + 8));
+                    try!(curs.write_u16::<LE>(msg_type));
+                    try!(curs.write_u32::<LE>(flags));
+                    hdr_buf = curs.into_inner();
+                }
+                debug!("Serializing into: size {}, msg_type {}, flags {}", size, msg_type, flags);
+                try!(dst.write_all(&hdr_buf));
+                debug!("Serializing message contents");
+                if buf.len() % 8 != 0 {
+                    let buf_len = buf.len();
+                    debug!("contents need to be padded by {}", 8 - buf_len % 8);
+                    buf.append(&mut vec![0u8; (8 - buf_len % 8) as usize]);
+                }
+                try!(dst.write_all(&buf));
 
                 Ok(())
             }
@@ -111,8 +125,9 @@ macro_rules! gen_message_enum {
 }
 
 gen_message_enum! {
-    0x03 => Welcome,
-    0x93 => Login
+    0x0003 => Welcome,
+    0x0093 => Login,
+    0x00E6 => BbSecurity
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -203,5 +218,36 @@ impl Serial for Login {
             hw_info: hw_info,
             security_data: security_data
         })
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BbSecurity {
+    // bb_pkt_hdr_t hdr;
+    // uint32_t err_code;
+    // uint32_t tag;
+    // uint32_t guildcard;
+    // uint32_t team_id;
+    // uint8_t security_data[40];
+    // uint32_t caps;
+    pub err_code: u32,
+    pub tag: u32,
+    pub guildcard: u32,
+    pub team_id: u32,
+    pub security_data: Vec<u8>,
+    pub caps: u32
+}
+impl Serial for BbSecurity {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(dst.write_u32::<LE>(self.err_code));
+        try!(dst.write_u32::<LE>(self.tag));
+        try!(dst.write_u32::<LE>(self.guildcard));
+        try!(dst.write_u32::<LE>(self.team_id));
+        try!(dst.write_all(&self.security_data));
+        try!(dst.write_u32::<LE>(self.caps));
+        Ok(())
+    }
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        unimplemented!()
     }
 }

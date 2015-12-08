@@ -32,16 +32,8 @@ fn handle_stream(mut stream: TcpStream, key_table: Vec<u32>) {
     welcome.serialize(&mut stream).unwrap();
 
     // now, wrap the stream with encrypt/decrypt
-    //let mut w_s = EncryptWriter::new(stream.try_clone().unwrap(), server_cipher);
+    let mut w_s = EncryptWriter::new(stream.try_clone().unwrap(), server_cipher);
     let mut r_s = DecryptReader::new(stream.try_clone().unwrap(), client_cipher);
-
-    // REMOVE THIS
-    // {
-    //     let mut buf = vec![0u8; 8];
-    //     stream.read(&mut buf);
-    //     debug!("{:?}", buf);
-    //     return
-    // }
 
     loop {
         let m = Message::deserialize(&mut r_s).unwrap();
@@ -49,6 +41,19 @@ fn handle_stream(mut stream: TcpStream, key_table: Vec<u32>) {
             Message::Unknown(o, f, b) => {
                 info!("type {}, flags {}, {:?}", o, f, b);
             },
+            Message::Login(f, Login { username, .. }) => {
+                info!("[{}] login attempt with username {}! that's cute...", peer_addr, username);
+                let r = Message::BbSecurity(0, BbSecurity {
+                    err_code: 7, // PERMABANNED
+                    tag: 0,
+                    guildcard: 0,
+                    team_id: 0,
+                    security_data: vec![0u8; 40],
+                    caps: 0
+                });
+                r.serialize(&mut w_s).unwrap();
+                return
+            }
             a => warn!("Received an unexpected but known message: {:?}", a)
         }
     }
