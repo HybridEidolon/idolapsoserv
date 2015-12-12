@@ -1,6 +1,6 @@
 //! Structures for the Patch and Data servers.
 
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, SocketAddrV4};
 use std::io;
 use std::io::{Read, Write};
 use std::borrow::Borrow;
@@ -16,7 +16,8 @@ use ::context::Context;
 
 pub struct PatchServer {
     motd_template: String,
-    bind: String
+    bind: String,
+    data_servers: Vec<SocketAddrV4>
 }
 
 pub struct DataServer {
@@ -27,7 +28,8 @@ pub struct ClientContext {
     server_cipher: PcCipher,
     client_cipher: PcCipher,
     stream: TcpStream,
-    motd: String
+    motd: String,
+    data_addr: Option<SocketAddrV4>
 }
 
 impl Context for ClientContext {
@@ -75,7 +77,7 @@ impl ClientContext {
                         message: self.motd.clone()
                     };
                     self.send_msg(&motd).unwrap();
-                    let red = Redirect { ip_addr: Ipv4Addr::from_str("127.0.0.1").unwrap(), port: 11001 };
+                    let red = Redirect { ip_addr: self.data_addr.as_ref().unwrap().ip().clone(), port: self.data_addr.as_ref().unwrap().port() };
                     self.send_msg(&red).unwrap();
                     // Now we break out of this connection.
                     return;
@@ -128,10 +130,11 @@ impl ClientContext {
 unsafe impl Send for ClientContext {}
 
 impl PatchServer {
-    pub fn new_bb<T: ToString, B: ToString>(motd_template: T, bind: B) -> PatchServer {
+    pub fn new_bb<T: ToString, B: ToString>(motd_template: T, bind: B, data_servers: &[SocketAddrV4]) -> PatchServer {
         PatchServer {
             motd_template: motd_template.to_string(),
-            bind: bind.to_string()
+            bind: bind.to_string(),
+            data_servers: data_servers.to_owned()
         }
     }
 
@@ -156,7 +159,8 @@ impl PatchServer {
                         server_cipher: PcCipher::new(random()),
                         client_cipher: PcCipher::new(random()),
                         stream: s,
-                        motd: self.format_motd(total_connects)
+                        motd: self.format_motd(total_connects),
+                        data_addr: Some(self.data_servers[random::<usize>() % self.data_servers.len()])
                     };
 
                     thread::spawn(move || {ctx.run();});
@@ -188,7 +192,8 @@ impl DataServer {
                         server_cipher: PcCipher::new(random()),
                         client_cipher: PcCipher::new(random()),
                         stream: s,
-                        motd: "".to_string()
+                        motd: "".to_string(),
+                        data_addr: None
                     };
 
                     thread::spawn(move || {ctx.run_data();});

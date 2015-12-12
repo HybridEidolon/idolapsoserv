@@ -6,12 +6,14 @@ authors = ["Eidolon"]
 [dependencies]
 rand = "0.3.12"
 byteorder = "0.4.2"
-rustc-serialize = "0.3.16"
+rustc-serialize = "0.3"
 psocrypto = { path = "psocrypto" }
 encoding = "0.2.32"
 log = "0.3.4"
 env_logger = "0.3.2"
 typenum = "1.1.0"
+toml = "0.1.24"
+docopt = "0.6.78"
 
 [[bin]]
 name = "idola_patch"
@@ -24,3 +26,6 @@ name = "idola_ship"
 
 [[bin]]
 name = "idola_data"
+
+[[bin]]
+name = "idola_monolith"

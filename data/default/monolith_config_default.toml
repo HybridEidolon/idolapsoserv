@@ -1,0 +1,3 @@
+[config]
+motd_template = "Hello! This is the default MOTD for the IDOLA PSOBB patch server.\n\nYou are client {client_num} to connect to this server."
+bb_keytable_path = "data/crypto/bb_table.bin"

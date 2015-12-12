@@ -31,6 +31,8 @@ pub mod game {
     }
 }
 
+pub mod bb;
+
 pub mod context;
 
 /// Utility functions
