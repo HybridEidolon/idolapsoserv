@@ -8,7 +8,7 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum Error {
-    BackendError(String, Option<Box<error::Error>>),
+    BackendError(Option<Box<error::Error>>),
     IoError(io::Error),
     Other(String, Option<Box<error::Error>>)
 }
@@ -26,7 +26,8 @@ impl error::Error for Error {
     fn description(&self) -> &str {
         use self::Error::*;
         match self {
-            &BackendError(ref s, _) => &s,
+            &BackendError(Some(ref e)) => e.description(),
+            &BackendError(None) => "",
             &IoError(ref e) => e.description(),
             &Other(ref s, _) => &s,
         }
@@ -35,7 +36,7 @@ impl error::Error for Error {
     fn cause(&self) -> Option<&error::Error> {
         use self::Error::*;
         match self {
-            &BackendError(_, Some(ref o)) => Some(o.as_ref()),
+            &BackendError(Some(ref o)) => Some(o.as_ref()),
             &IoError(ref e) => Some(e),
             &Other(_, Some(ref o)) => Some(o.as_ref()),
             _ => None

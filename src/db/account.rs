@@ -6,9 +6,9 @@ use crypto::sha2::Sha256;
 /// A struct representing a Blue Burst user's account.
 pub struct Account {
     pub id: Option<u32>,
-    username: String,
-    password_hash: String,
-    password_invalidated: bool,
+    pub username: String,
+    pub password_hash: String,
+    pub password_invalidated: bool,
     pub banned: bool
 }
 
