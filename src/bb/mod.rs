@@ -1,4 +1,4 @@
-use ::message::bb::*;
+use psomsg::bb::*;
 
 use std::net::{TcpStream};
 use std::sync::Arc;
@@ -7,7 +7,7 @@ use std::io::{Read, Cursor};
 
 use rand::random;
 
-use psocrypto::{Encryptor, Decryptor, DecryptReader, EncryptWriter, BbCipher};
+use psocrypto::{DecryptReader, EncryptWriter, BbCipher};
 
 pub struct Context {
     stream: TcpStream,
@@ -48,7 +48,7 @@ impl Context {
                 Message::Unknown(o, f, b) => {
                     info!("type {}, flags {}, {:?}", o, f, b);
                 },
-                Message::Login(f, Login { username, .. }) => {
+                Message::Login(_, Login { username, .. }) => {
                     info!("[{}] login attempt with username {}! that's cute...", peer_addr, username);
                     let r = Message::BbSecurity(0, BbSecurity {
                         err_code: 7, // PERMABANNED

@@ -195,7 +195,6 @@ impl Serial for Login {
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        use encoding::all::ASCII;
         let tag = try!(src.read_u32::<LE>());
         let guildcard = try!(src.read_u32::<LE>());
         let version = try!(src.read_u16::<LE>());

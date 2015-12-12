@@ -5,7 +5,7 @@ use std::io::{Read, Write};
 
 use psocrypto::{Encryptor, Decryptor};
 
-use ::message::{MessageEncode, MessageDecode};
+use psomsg::{MessageEncode, MessageDecode};
 
 /// A trait representing a client connection context. You can send and receive messages on this
 /// interface using the context's provided IO endpoints and ciphers.

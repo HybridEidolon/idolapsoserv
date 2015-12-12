@@ -82,8 +82,7 @@ fn data_server(channel: Sender<MonolithMsg>) {
 fn login_server(channel: Sender<MonolithMsg>, key_table_path: String) {
     use std::sync::Arc;
     use std::fs::File;
-    use std::io::Read;
-    use std::net::{TcpListener, TcpStream};
+    use std::net::TcpListener;
     use std::thread;
     channel.send(MonolithMsg::Up(MonolithComponent::Login)).unwrap();
     let key_table: Arc<Vec<u32>> = Arc::new(idola::bb::read_key_table(&mut File::open(&key_table_path).unwrap()).unwrap());

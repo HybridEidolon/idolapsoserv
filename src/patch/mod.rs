@@ -45,7 +45,7 @@ impl Context for ClientContext {
 
 impl ClientContext {
     pub fn run(&mut self) -> () {
-        use ::message::patch::*;
+        use psomsg::patch::*;
 
         let peer_addr = self.stream.peer_addr().unwrap();
 
@@ -68,8 +68,6 @@ impl ClientContext {
         }
 
         loop {
-            use std::net::Ipv4Addr;
-            use std::str::FromStr;
             // Read message
             if let Ok(s) = self.recv_msg() {match s {
                 Message::Login(Some(_)) => {
@@ -88,8 +86,8 @@ impl ClientContext {
     }
 
     pub fn run_data(&mut self) -> () {
-        use ::message::patch::*;
-        use ::message::staticvec::StaticVec;
+        use psomsg::patch::*;
+        use psomsg::staticvec::StaticVec;
         let peer = self.stream.peer_addr().unwrap();
 
         info!("connected {}", peer);

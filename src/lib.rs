@@ -1,14 +1,15 @@
-extern crate rand;
+// Separated compile units
 extern crate psocrypto;
+extern crate psomsg;
+
+extern crate rand;
 extern crate byteorder;
 extern crate encoding;
 extern crate typenum;
 #[macro_use] extern crate log;
+extern crate crypto;
+extern crate sqlite;
 
-/// Common message-related types.
-pub mod message;
-
-/// Patch server code.
 pub mod patch;
 
 /// Game information structures.
@@ -32,6 +33,8 @@ pub mod game {
 }
 
 pub mod bb;
+
+pub mod db;
 
 pub mod context;
 

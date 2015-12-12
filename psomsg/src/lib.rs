@@ -1,8 +1,12 @@
-//! Messages (often called _packets_ in other server implementations) that
-//! Phantasy Star Online communicates with.
-//!
-//! There are 3 sets of messages across all of the games: the login server,
-//! the patch server, and the ship server. Each have their own ID namespace.
+//! Implements an abstraction over Phantasy Star Online's many message namespaces.
+//! Intended for use with the IDOLA server project.
+
+extern crate byteorder;
+extern crate encoding;
+extern crate typenum;
+extern crate psocrypto;
+
+#[macro_use] extern crate log;
 
 pub mod staticvec;
 
@@ -27,8 +31,6 @@ mod prelude {
     pub use super::MsgHeader;
     pub use super::staticvec::StaticVec;
 }
-
-pub mod bb;
 
 use self::prelude::*;
 
@@ -364,4 +366,8 @@ impl Serial for bool {
     }
 }
 
+// We have to put these at the bottom because of the declaration of the macro...
+// ...but it's only used by patch, and that may change, since it isn't very useful
+// for anything else
 pub mod patch;
+pub mod bb;

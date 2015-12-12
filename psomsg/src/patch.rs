@@ -1,4 +1,4 @@
-use ::message::prelude::*;
+use ::prelude::*;
 use std::io::Cursor;
 
 use typenum::consts::{U12, U16, U32, U48, U64};
@@ -163,23 +163,24 @@ define_messages! {
     0x614 => Redirect6 { ip_addr: [u8; 16], port: u16, padding: u16 }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    // test_size!(Welcome, size_welcome, 0x4c - 4);
-    // test_size!(Redirect, size_redirect, 0xc - 4);
-    // test_size!(Redirect6, size_redirect6, 0x18 - 4);
-    // test_size!(FileSend, size_filesend, 0x3c - 4);
-    // test_size!(DataSend, size_datasend, 0x10 - 4);
-    // test_size!(FileDone, size_filedone, 0x8 - 4);
-    // test_size!(SetDirectory, size_setdir, 0x44 - 4);
-    // test_size!(FileInfo, size_fileinfo, 0x28 - 4);
-    // test_size!(FileInfoReply, size_fileinforeply, 0x10 - 4);
-    // test_size!(SendInfo, size_sendinfo, 0xc - 4);
-    //
-    // test_size!(StartList, size_startlist, 0);
-    // test_size!(OneDirUp, size_onedirup, 0);
-    // test_size!(FileListDone, size_filelistdone, 0);
-    // test_size!(SendDone, size_senddone, 0);
-    // test_size!(InfoFinished, size_infofinished, 0);
-    }
+// TODO fix these tests
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     // test_size!(Welcome, size_welcome, 0x4c - 4);
+//     // test_size!(Redirect, size_redirect, 0xc - 4);
+//     // test_size!(Redirect6, size_redirect6, 0x18 - 4);
+//     // test_size!(FileSend, size_filesend, 0x3c - 4);
+//     // test_size!(DataSend, size_datasend, 0x10 - 4);
+//     // test_size!(FileDone, size_filedone, 0x8 - 4);
+//     // test_size!(SetDirectory, size_setdir, 0x44 - 4);
+//     // test_size!(FileInfo, size_fileinfo, 0x28 - 4);
+//     // test_size!(FileInfoReply, size_fileinforeply, 0x10 - 4);
+//     // test_size!(SendInfo, size_sendinfo, 0xc - 4);
+//     //
+//     // test_size!(StartList, size_startlist, 0);
+//     // test_size!(OneDirUp, size_onedirup, 0);
+//     // test_size!(FileListDone, size_filelistdone, 0);
+//     // test_size!(SendDone, size_senddone, 0);
+//     // test_size!(InfoFinished, size_infofinished, 0);
+// }
