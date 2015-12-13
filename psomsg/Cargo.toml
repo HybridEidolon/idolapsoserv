@@ -4,8 +4,8 @@ version = "0.1.0"
 authors = ["Eidolon"]
 
 [dependencies]
-byteorder = "0.4"
-encoding = "0.2"
-log = "0.3"
+byteorder = "~0.4"
+encoding = "~0.2"
+log = "~0.3"
 psocrypto = { path = "../psocrypto" }
-typenum = "1.1"
+typenum = "~1.1"

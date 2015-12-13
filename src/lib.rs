@@ -8,7 +8,7 @@ extern crate encoding;
 extern crate typenum;
 #[macro_use] extern crate log;
 extern crate crypto;
-extern crate sqlite;
+extern crate rusqlite;
 
 pub mod patch;
 
