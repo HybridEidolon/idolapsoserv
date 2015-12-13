@@ -5,12 +5,20 @@ extern crate rustc_serialize;
 extern crate docopt;
 extern crate toml;
 
-use std::net::{Ipv4Addr, SocketAddrV4};
+use std::sync::Arc;
+use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
+use std::thread;
+use std::fs::File;
+use std::io::Read;
 
 use std::sync::mpsc::Sender;
 use std::sync::mpsc::channel;
 
 use docopt::Docopt;
+
+use idola::db::sqlite::Sqlite;
+use idola::db::Pool;
+use idola::bb::read_key_table;
 
 const USAGE: &'static str = "
 IDOLA Phantasy Star Online 'Monolith' Server
@@ -52,7 +60,8 @@ enum MonolithMsg {
 enum MonolithComponent {
     Patch,
     Data,
-    Login
+    Login,
+    Character
 }
 
 fn patch_server(channel: Sender<MonolithMsg>, motd_template: String, bind_address: String) {
@@ -79,19 +88,14 @@ fn data_server(channel: Sender<MonolithMsg>) {
     }).unwrap();
 }
 
-fn login_server(channel: Sender<MonolithMsg>, key_table_path: String) {
-    use std::sync::Arc;
-    use std::fs::File;
+fn login_server(channel: Sender<MonolithMsg>, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool>) {
     use std::net::TcpListener;
     use std::thread;
-    use idola::db::Pool;
-    use idola::db::sqlite::Sqlite;
 
     channel.send(MonolithMsg::Up(MonolithComponent::Login)).unwrap();
-    let key_table: Arc<Vec<u32>> = Arc::new(idola::bb::read_key_table(&mut File::open(&key_table_path).unwrap()).unwrap());
 
-    // make db
-    let db_pool = Arc::new(Pool::new(1, &mut Sqlite::new("test.db", true).unwrap()).unwrap());
+    let char_server_ip = Ipv4Addr::new(127, 0, 0, 1);
+    let char_server_port = 12001;
 
     let tcp_listener = TcpListener::bind("127.0.0.1:12000").unwrap();
     for s in tcp_listener.incoming() {
@@ -99,13 +103,38 @@ fn login_server(channel: Sender<MonolithMsg>, key_table_path: String) {
             Ok(s) => {
                 let kt_clone = key_table.clone();
                 let db_clone = db_pool.clone();
-                thread::spawn(move|| idola::bb::Context::new(s, kt_clone, db_clone).run().unwrap());
+                thread::spawn(move|| {
+                    use idola::login::bb::{Context, run_login};
+                    run_login(Context::new(s, kt_clone, db_clone), char_server_ip, char_server_port);
+                });
             },
             Err(e) => error!("error, quitting: {}", e)
         }
     }
 
     channel.send(MonolithMsg::DownGraceful(MonolithComponent::Login)).unwrap();
+}
+
+fn char_server(channel: Sender<MonolithMsg>, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool>) {
+
+    channel.send(MonolithMsg::Up(MonolithComponent::Character)).unwrap();
+
+    let tcp_listener = TcpListener::bind("127.0.0.1:12001").unwrap();
+    for s in tcp_listener.incoming() {
+        match s {
+            Ok(s) => {
+                let kt_clone = key_table.clone();
+                let db_clone = db_pool.clone();
+                thread::spawn(move|| {
+                    use idola::login::bb::{Context, run_character};
+                    run_character(Context::new(s, kt_clone, db_clone));
+                });
+            },
+            Err(e) => error!("closing character server: {:?}", e)
+        }
+    }
+
+    channel.send(MonolithMsg::DownGraceful(MonolithComponent::Character)).unwrap();
 }
 
 fn read_config(path: &str) -> Config {
@@ -149,7 +178,12 @@ fn main() {
 
     let config = read_config(&args.flag_config.clone().unwrap_or("monolith_config.toml".to_string()));
     let motd_template_clone = config.motd_template.clone();
-    let bb_keytable_clone = config.bb_keytable_path.clone();
+
+    // Load the BB key table
+    let key_table = Arc::new(read_key_table(&mut File::open(config.bb_keytable_path.unwrap_or("data/crypto/bb_table.bin".to_string())).unwrap()).unwrap());
+
+    // Set up the DB pool
+    let pool = Arc::new(Pool::new(1, &mut Sqlite::new("test.db", true).unwrap()).unwrap());
 
     let (tx, rx) = channel();
     let tx_c = tx.clone();
@@ -157,11 +191,18 @@ fn main() {
     let tx_c = tx.clone();
     thread::spawn(move|| data_server(tx_c));
     let tx_c = tx.clone();
-    thread::spawn(move|| login_server(tx_c, bb_keytable_clone.clone().unwrap_or("data/crypto/bb_table.bin".to_string())));
+    let kt_clone = key_table.clone();
+    let pool_clone = pool.clone();
+    thread::spawn(move|| login_server(tx_c, kt_clone, pool_clone));
+    let tx_c = tx.clone();
+    let kt_clone = key_table.clone();
+    let pool_clone = pool.clone();
+    thread::spawn(move|| char_server(tx_c, kt_clone, pool_clone));
 
     let mut patch_status = true;
     let mut data_status = true;
     let mut login_status = true;
+    let mut char_status = true;
 
     for m in rx.iter() {
         use MonolithComponent::*;
@@ -170,7 +211,8 @@ fn main() {
                 match a {
                     Patch => patch_status = false,
                     Data => data_status = false,
-                    Login => login_status = false
+                    Login => login_status = false,
+                    Character => char_status = false
                 }
                 error!("Down by error {:?}: {:?}", a, s);
             },
@@ -178,14 +220,15 @@ fn main() {
                 match a {
                     Patch => patch_status = false,
                     Data => data_status = false,
-                    Login => login_status = false
+                    Login => login_status = false,
+                    Character => char_status = false
                 }
                 info!("{:?} down gracefully", a)
             },
             _ => ()
         }
 
-        if !patch_status && !login_status && !data_status {
+        if !patch_status && !login_status && !data_status && !char_status {
             break
         }
     }

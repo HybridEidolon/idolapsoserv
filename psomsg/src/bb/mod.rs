@@ -5,6 +5,8 @@
 use std::io::{Read, Write};
 use std::io;
 
+use std::net::Ipv4Addr;
+
 use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
 
 pub static PSOBB_COPYRIGHT_STRING: &'static [u8] = b"Phantasy Star Online Blue Burst Game Server. Copyright 1999-2004 SONICTEAM.";
@@ -126,6 +128,7 @@ macro_rules! gen_message_enum {
 
 gen_message_enum! {
     0x0003 => Welcome,
+    0x0019 => Redirect,
     0x0093 => Login,
     0x00E6 => BbSecurity
 }
@@ -233,7 +236,7 @@ pub struct BbSecurity {
     pub tag: u32,
     pub guildcard: u32,
     pub team_id: u32,
-    pub security_data: Vec<u8>,
+    pub security_data: BbSecurityData,
     pub caps: u32
 }
 impl Serial for BbSecurity {
@@ -242,11 +245,79 @@ impl Serial for BbSecurity {
         try!(dst.write_u32::<LE>(self.tag));
         try!(dst.write_u32::<LE>(self.guildcard));
         try!(dst.write_u32::<LE>(self.team_id));
-        try!(dst.write_all(&self.security_data));
+        try!(self.security_data.serialize(dst));
         try!(dst.write_u32::<LE>(self.caps));
         Ok(())
     }
     fn deserialize(src: &mut Read) -> io::Result<Self> {
         unimplemented!()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Redirect {
+    // uint32_t ip_addr;       /* Big-endian */
+    // uint16_t port;          /* Little-endian */
+    // uint8_t padding[2];
+    pub ip: Ipv4Addr,
+    pub port: u16
+}
+
+impl Serial for Redirect {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.ip.serialize(dst));
+        try!(dst.write_u16::<LE>(self.port));
+        try!(dst.write_u16::<LE>(0)); // padding
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        unimplemented!()
+    }
+}
+
+// Other Serial implementations
+impl Serial for Ipv4Addr {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        let octets = self.octets();
+        try!(dst.write_all(&octets[..]));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        unimplemented!()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct BbSecurityData {
+    // uint32_t magic;                     /* Must be 0xDEADBEEF */
+    // uint8_t slot;                       /* Selected character */
+    // uint8_t sel_char;                   /* Have they selected a character? */
+    // uint8_t reserved[34];               /* Set to 0 */
+    pub magic: u32,
+    pub slot: u8,
+    pub sel_char: bool
+}
+
+impl Serial for BbSecurityData {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(dst.write_u32::<LE>(self.magic));
+        try!(dst.write_u8(self.slot));
+        try!(dst.write_u8(if self.sel_char {1} else {0}));
+        try!(dst.write_all(&[0; 34][..]));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let magic = try!(src.read_u32::<LE>());
+        let slot = try!(src.read_u8());
+        let sel_char = match try!(src.read_u8()) { 0 => false, _ => true };
+        try!(src.read_exact(&mut [0; 34][..]));
+        Ok(BbSecurityData {
+            magic: magic,
+            slot: slot,
+            sel_char: sel_char
+        })
     }
 }

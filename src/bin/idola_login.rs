@@ -31,9 +31,10 @@ fn main() {
     for s in tcp_listener.incoming() {
         match s {
             Ok(s) => {
+                use idola::login::bb::{Context, run_character};
                 let kt_clone = key_table.clone();
                 let db_clone = db_pool.clone();
-                thread::spawn(move|| idola::bb::Context::new(s, kt_clone, db_clone).run().unwrap());
+                thread::spawn(move|| run_character(Context::new(s, kt_clone, db_clone)));
             },
             Err(e) => error!("error, quitting: {}", e)
         }

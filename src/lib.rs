@@ -32,6 +32,8 @@ pub mod game {
     }
 }
 
+pub mod login;
+
 pub mod bb;
 
 pub mod db;

@@ -1,6 +1,6 @@
 target
 
-psocrypto/Cargo.lock
+pso*/Cargo.lock
 
 patch_config.toml
 monolith_config.toml
