@@ -148,7 +148,22 @@ pub fn run_character(mut ctx: Context) -> () {
             },
             Message::Login(_, Login { username, password, .. }) => {
                 match check_login(ctx.db_pool.clone(), &username, &password) {
+                    CheckLogin::Success => {
+                        info!("[{}] character: {} logged in successfully", peer_addr, username);
+                        let r = Message::BbSecurity(0, BbSecurity {
+                            err_code: 0,
+                            tag: 0,
+                            guildcard: 1000000,
+                            team_id: 0,
+                            security_data: BbSecurityData::default(),
+                            caps: 0
+                        });
+                        r.serialize(&mut w_s).unwrap();
+                    },
                     _ => {
+                        // they shouldn't be at this point, so we're gonna send an error
+                        let r = Message::LargeMsg(0, LargeMsg("Something happened recently that invalidated your account,\nso you cannot proceed.".to_string()));
+                        r.serialize(&mut w_s).unwrap();
                         let r = Message::BbSecurity(0, BbSecurity {
                             err_code: 4, // maintenance
                             tag: 0,
@@ -160,6 +175,69 @@ pub fn run_character(mut ctx: Context) -> () {
                         r.serialize(&mut w_s).unwrap();
                         return
                     }
+                }
+            },
+            Message::BbOptionRequest(_, _) => {
+                info!("[{}] character: request options", peer_addr);
+                let r = Message::BbOptionConfig(0, BbOptionConfig(BbTeamAndKeyData::default()));
+                r.serialize(&mut w_s).unwrap();
+            },
+            Message::BbChecksum(_, BbChecksum(cs)) => {
+                info!("[{}] character: client checksum is {}", peer_addr, cs);
+                let r = Message::BbChecksumAck(0, BbChecksumAck(true));
+                r.serialize(&mut w_s).unwrap();
+            },
+            Message::BbGuildRequest(_, _) => {
+                use crc::crc32::checksum_ieee;
+                info!("[{}] character: guild card request", peer_addr);
+                let checksum = checksum_ieee(&vec![0u8; 54672][..]);
+                let r = Message::BbGuildCardHdr(0, BbGuildCardHdr {
+                    one: 1,
+                    len: 54672,
+                    checksum: checksum
+                });
+                r.serialize(&mut w_s).unwrap();
+            },
+            Message::BbParamHdrReq(_, _) => {
+                let r = Message::LargeMsg(0, LargeMsg("Whoops, param files aren't ready yet.".to_string()));
+                r.serialize(&mut w_s).unwrap();
+                return
+            },
+            // 54672 or 0xD590 bytes of guild card nonsense
+            Message::BbGuildCardChunkReq(_, BbGuildCardChunkReq(_, chunk, cont)) => {
+                if cont {
+                    let size_remaining: usize = 54672 - (chunk as usize * 0x6800);
+                    let size: usize = if size_remaining < 0x6800 { size_remaining } else { 0x6800 };
+                    info!("[{}] sending guild card chunk {} of size {}", peer_addr, chunk, size);
+                    let r = Message::BbGuildCardChunk(0, BbGuildCardChunk {
+                        unk: 0,
+                        chunk: chunk,
+                        data: vec![0u8; size]
+                    });
+                    r.serialize(&mut w_s).unwrap();
+                }
+            },
+            Message::BbCharSelect(_, b) => {
+                info!("[{}] bb char select {:?}", peer_addr, b);
+                if b.selecting {
+                    let r = Message::LargeMsg(0, LargeMsg("how'd you do that. you can't even make characters yet. get out.".to_string()));
+                    r.serialize(&mut w_s).unwrap();
+                    let r = Message::BbSecurity(0, BbSecurity {
+                        err_code: 4,
+                        tag: 0,
+                        guildcard: 0,
+                        team_id: 0,
+                        security_data: BbSecurityData::default(),
+                        caps: 0
+                    });
+                    r.serialize(&mut w_s).unwrap();
+                    return
+                } else {
+                    let r = Message::BbCharAck(0, BbCharAck {
+                        slot: b.slot,
+                        code: 2 //nonexistant
+                    });
+                    r.serialize(&mut w_s).unwrap();
                 }
             }
             a => info!("[{}] known but unconsidered message received: {:?}", peer_addr, a)

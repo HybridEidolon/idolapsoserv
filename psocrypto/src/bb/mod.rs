@@ -51,8 +51,13 @@ impl Encryptor for BbCipher {
         let mut edi: W<u32>;
         let mut tmp: W<u32>;
 
+        if input.len() > output.len() {
+            return Err(format!("Buffer size too large in encrypt: input {}, output {}", input.len(), output.len()))
+        }
+
         let mut ci = Cursor::new(input);
         let mut co = Cursor::new(output);
+
 
         // Operate on 2 u32 at a time
         loop {
@@ -108,10 +113,10 @@ impl Encryptor for BbCipher {
 
             // Write phase
             if let Err(_) = co.write_u32::<LittleEndian>(ebp.0) {
-                return Err("Output buffer is not big enough".to_string())
+                return Err("Output buffer is not big enough (need 8 more bytes)".to_string())
             }
             if let Err(_) = co.write_u32::<LittleEndian>(ebx.0) {
-                return Err("Output buffer is not big enough".to_string())
+                return Err("Output buffer is not big enough (need 4 more bytes)".to_string())
             }
         }
     }
@@ -125,6 +130,10 @@ impl Decryptor for BbCipher {
         let mut esi: W<u32>;
         let mut edi: W<u32>;
         let mut tmp: W<u32>;
+
+        if input.len() > output.len() {
+            return Err(format!("Buffer size too large in decrypt: input {}, output {}", input.len(), output.len()))
+        }
 
         let mut ci = Cursor::new(input);
         let mut co = Cursor::new(output);
@@ -183,10 +192,10 @@ impl Decryptor for BbCipher {
 
             // Write phase
             if let Err(_) = co.write_u32::<LittleEndian>(ebp.0) {
-                return Err("Output buffer is not big enough".to_string())
+                return Err("Output buffer is not big enough (need 8 more bytes)".to_string())
             }
             if let Err(_) = co.write_u32::<LittleEndian>(ebx.0) {
-                return Err("Output buffer is not big enough".to_string())
+                return Err("Output buffer is not big enough (need 4 more bytes)".to_string())
             }
         }
     }

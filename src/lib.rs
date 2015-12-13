@@ -9,6 +9,7 @@ extern crate typenum;
 #[macro_use] extern crate log;
 extern crate crypto;
 extern crate rusqlite;
+extern crate crc;
 
 pub mod patch;
 
