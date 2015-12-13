@@ -21,9 +21,10 @@ pub type Result<T> = result::Result<T, Error>;
 ///
 /// When receiving a trait object on this trait, the implementing type should already have
 /// initialized its resources so the methods would succeed under normal conditions.
-pub trait Backend: Sized {
+pub trait Backend {
     /// Attempt to clone this Backend and create one that connects to the same database.
-    fn try_clone(&mut self) -> Result<Self>;
+    /// A boxed Backend trait object is yielded so the trait doesn't have a Sized constraint.
+    fn try_clone(&mut self) -> Result<Box<Backend>>;
 
     /// Retrieve an account by its ID.
     fn get_account_by_id(&self, id: u32) -> Result<Option<Account>>;

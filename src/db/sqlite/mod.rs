@@ -74,12 +74,12 @@ impl Sqlite {
 #[inline(always)] fn i2b(a: i64) -> bool { match a { 0 => false, _ => true }}
 
 impl Backend for Sqlite {
-    fn try_clone(&mut self) -> Result<Self> {
+    fn try_clone(&mut self) -> Result<Box<Backend>> {
         let c = try_db!(Connection::open(&self.path.clone()));
-        Ok(Sqlite {
+        Ok(Box::new(Sqlite {
             path: self.path.clone(),
             conn: c
-        })
+        }))
     }
 
     fn get_account_by_id(&self, id: u32) -> Result<Option<Account>> {

@@ -10,7 +10,6 @@ use std::fs::File;
 use std::thread;
 use std::sync::Arc;
 
-use idola::db::Backend;
 use idola::db::sqlite::Sqlite;
 use idola::db::pool::Pool;
 

@@ -9,16 +9,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// A connection pool of Backend instances that can be safely moved over thread boundaries and
 /// called asynchronously.
-pub struct Pool<B: Backend> {
-    backends: Vec<Arc<Mutex<B>>>,
+pub struct Pool {
+    backends: Vec<Arc<Mutex<Box<Backend>>>>,
     counter: AtomicUsize
 }
 
-impl<B: Backend> Pool<B> {
+impl Pool {
     /// Fetch the next connection to use (not necessarily available). This minimizes the chance
     /// for blocking over the returned Backend, but does not completely eliminate it. Holders of
     /// a reference to the Backend should try to minimize time spent holding on the Mutex guard.
-    pub fn get_connection(&self) -> Result<Arc<Mutex<B>>> {
+    pub fn get_connection(&self) -> Result<Arc<Mutex<Box<Backend>>>> {
         let i = self.counter.fetch_add(1, Ordering::SeqCst);
         match self.backends.get(i % self.backends.len()) {
             Some(b) => Ok(b.clone()),
@@ -28,7 +28,7 @@ impl<B: Backend> Pool<B> {
 
     /// Creates a new connection pool, making the given number of clones of the base Backend.
     /// An error is returned if it fails to clone as many as requested.
-    pub fn new(connections: usize, base: &mut B) -> Result<Pool<B>> {
+    pub fn new(connections: usize, base: &mut Backend) -> Result<Pool> {
         let mut be = Vec::with_capacity(connections);
         for _ in 0..connections {
             let c = match base.try_clone() {
@@ -45,5 +45,5 @@ impl<B: Backend> Pool<B> {
     }
 }
 
-unsafe impl<B: Backend> Send for Pool<B> {}
-unsafe impl<B: Backend> Sync for Pool<B> {}
+unsafe impl Send for Pool {}
+unsafe impl Sync for Pool {}

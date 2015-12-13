@@ -6,7 +6,6 @@ use std::io;
 use std::io::{Read, Cursor};
 
 use ::db::Backend;
-use ::db::sqlite::Sqlite;
 use ::db::pool::Pool;
 
 use rand::random;
@@ -16,11 +15,11 @@ use psocrypto::{DecryptReader, EncryptWriter, BbCipher};
 pub struct Context {
     stream: TcpStream,
     key_table: Arc<Vec<u32>>,
-    db_pool: Arc<Pool<Sqlite>>
+    db_pool: Arc<Pool>
 }
 
 impl Context {
-    pub fn new(stream: TcpStream, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool<Sqlite>>) -> Context {
+    pub fn new(stream: TcpStream, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool>) -> Context {
         Context {
             stream: stream,
             key_table: key_table,
