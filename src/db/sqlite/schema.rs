@@ -1,5 +1,11 @@
 pub static SCHEMA: &'static str = "
 BEGIN;
+
+CREATE TABLE IF NOT EXISTS version (
+    version INTEGER PRIMARY KEY
+);
+INSERT OR REPLACE INTO version (version) VALUES (0);
+
 CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE,
@@ -7,6 +13,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     password_invalidated INTEGER,
     banned INTEGER
 );
+
 COMMIT;
 ";
 

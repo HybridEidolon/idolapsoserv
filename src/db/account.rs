@@ -43,6 +43,11 @@ impl Account {
     pub fn id(&self) -> Option<u32> {
         self.id
     }
+
+    pub fn cmp_password(&self, pw: &str, salt: &str) -> bool {
+        let hashed = hash_password(&self.username, pw, salt);
+        hashed == self.password_hash
+    }
 }
 
 /// Generate a password hash string.

@@ -1,7 +1,5 @@
 //! Sqlite3 database backend.
 
-use std::path::Path;
-
 use super::Result;
 use super::Backend;
 use super::error::Error;
@@ -25,24 +23,49 @@ macro_rules! try_db {
     }
 }
 
+/// A wrapper around the Sqlite implementation's connection, to implement Backend.
 pub struct Sqlite {
+    path: String,
     conn: Connection
 }
 
 impl Sqlite {
-    pub fn new<T: AsRef<Path>>(path: T) -> Result<Sqlite> {
-        let conn = try_db!(Connection::open(path));
-        try_db!(Sqlite::initialize_tables(&conn));
+    /// Create a new Sqlite instance, initializing the schema of the database and applying
+    /// all migrations needed to update it. The `new` argument allows you to initialize a new
+    /// database up to the current schema, rather than checking and migrating the database.
+    ///
+    /// This is a destructive operation. Reverse migrations may destroy data from the database.
+    pub fn new<T: Into<String>>(path: T, new: bool) -> Result<Sqlite> {
+        let p = path.into();
+        let conn = try_db!(Connection::open(&p));
+        if new {
+            try_db!(Sqlite::initialize_tables(&conn));
+        } else {
+            try_db!(Sqlite::migrate(&conn, 0));
+        }
 
         Ok(Sqlite {
+            path: p,
             conn: conn
         })
     }
 
+    /// Initialize and update tables
     fn initialize_tables(c: &Connection) -> Result<()> {
+
         try_db!(c.execute_batch(SCHEMA));
         Ok(())
     }
+
+    /// Migrate the database
+    fn migrate(_: &Connection, _: i64) -> Result<()> {
+        //let version = try_db!(c.query_row("SELECT version FROM version LIMIT 1"), &[], |r| r.get::<i64>(0));
+        Ok(())
+    }
+
+    // fn reverse_migrations(c: &Connection, v: i64) -> Result<()> {
+    //     Ok(())
+    // }
 }
 
 
@@ -51,6 +74,14 @@ impl Sqlite {
 #[inline(always)] fn i2b(a: i64) -> bool { match a { 0 => false, _ => true }}
 
 impl Backend for Sqlite {
+    fn try_clone(&mut self) -> Result<Self> {
+        let c = try_db!(Connection::open(&self.path.clone()));
+        Ok(Sqlite {
+            path: self.path.clone(),
+            conn: c
+        })
+    }
+
     fn get_account_by_id(&self, id: u32) -> Result<Option<Account>> {
         let id = id as i64;
         let mut stmt = try_db!(self.conn.prepare(
@@ -73,17 +104,15 @@ impl Backend for Sqlite {
         }
     }
 
-    fn get_account_by_username<U: Into<String>>(&self, username: U) -> Result<Option<Account>> {
-        let u = username.into();
-        let uc = u.clone();
+    fn get_account_by_username(&self, username: &str) -> Result<Option<Account>> {
         let mut stmt = try_db!(self.conn.prepare(
             "SELECT id,password_hash,password_invalidated,banned FROM accounts WHERE username=? LIMIT 1"
         ));
 
-        let mut results = try_db!(stmt.query_map(&[&u], |row| {
+        let mut results = try_db!(stmt.query_map(&[&username], |row| {
             Account {
                 id: Some(row.get::<i64>(0) as u32),
-                username: uc.clone(),
+                username: username.to_owned(),
                 password_hash: row.get(1),
                 password_invalidated: i2b(row.get(2)),
                 banned: i2b(row.get(3))
@@ -100,8 +129,8 @@ impl Backend for Sqlite {
         match account.id {
             Some(id) => {
                 let id = id as i64;
-                let mut stmt = try_db!(self.conn.prepare("UPDATE accounts (username,password_hash,password_invalidated,banned) WHERE id=? VALUES (?,?,?,?)"));
-                try_db!(stmt.execute(&[&id, &account.username, &account.password_hash, &b2i(account.password_invalidated), &b2i(account.banned)]));
+                let mut stmt = try_db!(self.conn.prepare("UPDATE accounts SET (username=?,password_hash=?,password_invalidated=?,banned=?) WHERE id=?"));
+                try_db!(stmt.execute(&[&account.username, &account.password_hash, &b2i(account.password_invalidated), &b2i(account.banned), &id]));
                 Ok(())
             },
             None => {

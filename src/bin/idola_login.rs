@@ -10,6 +10,10 @@ use std::fs::File;
 use std::thread;
 use std::sync::Arc;
 
+use idola::db::Backend;
+use idola::db::sqlite::Sqlite;
+use idola::db::pool::Pool;
+
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
     std::env::set_var("RUST_LOG", "DEBUG");
@@ -21,12 +25,16 @@ fn main() {
     info!("Read Blue Burst encryption key table from data/crypto/bb_table.bin");
     debug!("The first few values are {:x}, {:x}, {:x}, {:x}", key_table[0], key_table[1], key_table[2], key_table[3]);
 
+    // make db
+    let db_pool = Arc::new(Pool::new(1, &mut Sqlite::new("test.db", true).unwrap()).unwrap());
+
     let tcp_listener = TcpListener::bind("0.0.0.0:12000").unwrap();
     for s in tcp_listener.incoming() {
         match s {
             Ok(s) => {
                 let kt_clone = key_table.clone();
-                thread::spawn(move|| idola::bb::Context::new(s, kt_clone).run().unwrap());
+                let db_clone = db_pool.clone();
+                thread::spawn(move|| idola::bb::Context::new(s, kt_clone, db_clone).run().unwrap());
             },
             Err(e) => error!("error, quitting: {}", e)
         }

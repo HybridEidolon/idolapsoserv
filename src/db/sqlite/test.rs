@@ -4,7 +4,7 @@ use ::db::account::Account;
 
 #[test]
 fn create_account() {
-    let s = Sqlite::new(":memory:").unwrap();
+    let s = Sqlite::new(":memory:", new).unwrap();
 
     let mut a = Account::new("testuser", "testpassword", "pourthesalt");
 
@@ -13,7 +13,7 @@ fn create_account() {
 
 #[test]
 fn fetch_account_by_id() {
-    let s = Sqlite::new(":memory:").unwrap();
+    let s = Sqlite::new(":memory:", new).unwrap();
 
     let mut a = Account::new("testuser", "testpassword", "pourthesalt");
 
@@ -30,7 +30,7 @@ fn fetch_account_by_id() {
 
 #[test]
 fn fetch_account_by_username() {
-    let s = Sqlite::new(":memory:").unwrap();
+    let s = Sqlite::new(":memory:", new).unwrap();
 
     let mut a = Account::new("testuser", "testpassword", "pourthesalt");
 

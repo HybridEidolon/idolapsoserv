@@ -1,9 +1,13 @@
 use psomsg::bb::*;
 
 use std::net::{TcpStream};
-use std::sync::Arc;
+use std::sync::{Arc};
 use std::io;
 use std::io::{Read, Cursor};
+
+use ::db::Backend;
+use ::db::sqlite::Sqlite;
+use ::db::pool::Pool;
 
 use rand::random;
 
@@ -11,14 +15,16 @@ use psocrypto::{DecryptReader, EncryptWriter, BbCipher};
 
 pub struct Context {
     stream: TcpStream,
-    key_table: Arc<Vec<u32>>
+    key_table: Arc<Vec<u32>>,
+    db_pool: Arc<Pool<Sqlite>>
 }
 
 impl Context {
-    pub fn new(stream: TcpStream, key_table: Arc<Vec<u32>>) -> Context {
+    pub fn new(stream: TcpStream, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool<Sqlite>>) -> Context {
         Context {
             stream: stream,
-            key_table: key_table
+            key_table: key_table,
+            db_pool: db_pool
         }
     }
 
@@ -48,18 +54,70 @@ impl Context {
                 Message::Unknown(o, f, b) => {
                     info!("type {}, flags {}, {:?}", o, f, b);
                 },
-                Message::Login(_, Login { username, .. }) => {
-                    info!("[{}] login attempt with username {}! that's cute...", peer_addr, username);
-                    let r = Message::BbSecurity(0, BbSecurity {
-                        err_code: 7, // PERMABANNED
-                        tag: 0,
-                        guildcard: 0,
-                        team_id: 0,
-                        security_data: vec![0u8; 40],
-                        caps: 0
-                    });
-                    r.serialize(&mut w_s).unwrap();
-                    return Ok(())
+                Message::Login(_, Login { username, password, .. }) => {
+
+                    info!("[{}] login attempt with username {}", peer_addr, username);
+                    let backend = self.db_pool.get_connection().unwrap();
+                    let account;
+                    {
+                        let b = backend.lock().unwrap();
+                        account = b.get_account_by_username(&username).unwrap();
+                    }
+                    match account {
+                        Some(a) => {
+                            if a.banned {
+                                let r = Message::BbSecurity(0, BbSecurity {
+                                    err_code: 6, // banned
+                                    tag: 0,
+                                    guildcard: 0,
+                                    team_id: 0,
+                                    security_data: vec![0u8; 40],
+                                    caps: 0
+                                });
+                                r.serialize(&mut w_s).unwrap();
+                                return Ok(())
+                            } else {
+                                // Check password
+                                // TODO real salt
+                                if a.cmp_password(&password, "") {
+                                    let r = Message::BbSecurity(0, BbSecurity {
+                                        err_code: 4, // maintenance TODO
+                                        tag: 0,
+                                        guildcard: 0,
+                                        team_id: 0,
+                                        security_data: vec![0u8; 40],
+                                        caps: 0
+                                    });
+                                    r.serialize(&mut w_s).unwrap();
+                                    return Ok(())
+                                } else {
+                                    // password is invalid
+                                    let r = Message::BbSecurity(0, BbSecurity {
+                                        err_code: 2, // bad pw
+                                        tag: 0,
+                                        guildcard: 0,
+                                        team_id: 0,
+                                        security_data: vec![0u8; 40],
+                                        caps: 0
+                                    });
+                                    r.serialize(&mut w_s).unwrap();
+                                    return Ok(())
+                                }
+                            }
+                        },
+                        None => {
+                            let r = Message::BbSecurity(0, BbSecurity {
+                                err_code: 8, // user doesn't exist
+                                tag: 0,
+                                guildcard: 0,
+                                team_id: 0,
+                                security_data: vec![0u8; 40],
+                                caps: 0
+                            });
+                            r.serialize(&mut w_s).unwrap();
+                            return Ok(())
+                        }
+                    }
                 }
                 a => warn!("Received an unexpected but known message: {:?}", a)
             }

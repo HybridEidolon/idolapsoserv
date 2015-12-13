@@ -84,15 +84,22 @@ fn login_server(channel: Sender<MonolithMsg>, key_table_path: String) {
     use std::fs::File;
     use std::net::TcpListener;
     use std::thread;
+    use idola::db::Pool;
+    use idola::db::sqlite::Sqlite;
+
     channel.send(MonolithMsg::Up(MonolithComponent::Login)).unwrap();
     let key_table: Arc<Vec<u32>> = Arc::new(idola::bb::read_key_table(&mut File::open(&key_table_path).unwrap()).unwrap());
+
+    // make db
+    let db_pool = Arc::new(Pool::new(1, &mut Sqlite::new("test.db", true).unwrap()).unwrap());
 
     let tcp_listener = TcpListener::bind("127.0.0.1:12000").unwrap();
     for s in tcp_listener.incoming() {
         match s {
             Ok(s) => {
                 let kt_clone = key_table.clone();
-                thread::spawn(move|| idola::bb::Context::new(s, kt_clone).run().unwrap());
+                let db_clone = db_pool.clone();
+                thread::spawn(move|| idola::bb::Context::new(s, kt_clone, db_clone).run().unwrap());
             },
             Err(e) => error!("error, quitting: {}", e)
         }
