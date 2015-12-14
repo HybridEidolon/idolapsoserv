@@ -1,4 +1,5 @@
 extern crate idola;
+extern crate psomsg;
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate rustc_serialize;
@@ -105,7 +106,7 @@ fn login_server(channel: Sender<MonolithMsg>, key_table: Arc<Vec<u32>>, db_pool:
                 let db_clone = db_pool.clone();
                 thread::spawn(move|| {
                     use idola::login::bb::{Context, run_login};
-                    run_login(Context::new(s, kt_clone, db_clone), char_server_ip, char_server_port);
+                    run_login(Context::new(s, kt_clone, db_clone, None), char_server_ip, char_server_port);
                 });
             },
             Err(e) => error!("error, quitting: {}", e)
@@ -115,7 +116,7 @@ fn login_server(channel: Sender<MonolithMsg>, key_table: Arc<Vec<u32>>, db_pool:
     channel.send(MonolithMsg::DownGraceful(MonolithComponent::Login)).unwrap();
 }
 
-fn char_server(channel: Sender<MonolithMsg>, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool>) {
+fn char_server(channel: Sender<MonolithMsg>, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool>, param_chunks: Arc<(psomsg::bb::Message, Vec<psomsg::bb::Message>)>) {
 
     channel.send(MonolithMsg::Up(MonolithComponent::Character)).unwrap();
 
@@ -125,9 +126,10 @@ fn char_server(channel: Sender<MonolithMsg>, key_table: Arc<Vec<u32>>, db_pool: 
             Ok(s) => {
                 let kt_clone = key_table.clone();
                 let db_clone = db_pool.clone();
+                let pc_clone = param_chunks.clone();
                 thread::spawn(move|| {
                     use idola::login::bb::{Context, run_character};
-                    run_character(Context::new(s, kt_clone, db_clone));
+                    run_character(Context::new(s, kt_clone, db_clone, Some(pc_clone)));
                 });
             },
             Err(e) => error!("closing character server: {:?}", e)
@@ -185,6 +187,9 @@ fn main() {
     // Set up the DB pool
     let pool = Arc::new(Pool::new(1, &mut Sqlite::new("test.db", true).unwrap()).unwrap());
 
+    // Load the parameter files
+    let param_chunks = Arc::new(idola::login::paramfiles::load_paramfiles_msgs().unwrap());
+
     let (tx, rx) = channel();
     let tx_c = tx.clone();
     thread::spawn(move|| patch_server(tx_c, motd_template_clone, "127.0.0.1:11000".to_string()));
@@ -197,7 +202,7 @@ fn main() {
     let tx_c = tx.clone();
     let kt_clone = key_table.clone();
     let pool_clone = pool.clone();
-    thread::spawn(move|| char_server(tx_c, kt_clone, pool_clone));
+    thread::spawn(move|| char_server(tx_c, kt_clone, pool_clone, param_chunks));
 
     let mut patch_status = true;
     let mut data_status = true;

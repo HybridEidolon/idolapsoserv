@@ -1,0 +1,11 @@
+[package]
+name = "psodata"
+version = "0.1.0"
+authors = ["Eidolon"]
+description = "Structures and parsers for PSO-specific data formats."
+
+[dependencies]
+byteorder = "0.4"
+
+[[bin]]
+name = "bpedump"

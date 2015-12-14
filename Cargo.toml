@@ -6,6 +6,7 @@ authors = ["Eidolon"]
 [dependencies]
 psocrypto = { path = "psocrypto" }
 psomsg = { path = "psomsg" }
+psodata = { path = "psodata" }
 rand = "~0.3"
 byteorder = "~0.4"
 rustc-serialize = "~0.3"

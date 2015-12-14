@@ -7,7 +7,7 @@ extern crate encoding;
 
 use std::net::*;
 use std::fs::File;
-use std::thread;
+//use std::thread;
 use std::sync::Arc;
 
 use idola::db::sqlite::Sqlite;
@@ -25,16 +25,17 @@ fn main() {
     debug!("The first few values are {:x}, {:x}, {:x}, {:x}", key_table[0], key_table[1], key_table[2], key_table[3]);
 
     // make db
-    let db_pool = Arc::new(Pool::new(1, &mut Sqlite::new("test.db", true).unwrap()).unwrap());
+    //let db_pool = Arc::new(Pool::new(1, &mut Sqlite::new("test.db", true).unwrap()).unwrap());
 
     let tcp_listener = TcpListener::bind("0.0.0.0:12000").unwrap();
     for s in tcp_listener.incoming() {
         match s {
             Ok(s) => {
-                use idola::login::bb::{Context, run_character};
-                let kt_clone = key_table.clone();
-                let db_clone = db_pool.clone();
-                thread::spawn(move|| run_character(Context::new(s, kt_clone, db_clone)));
+                //use idola::login::bb::{Context, run_login};
+                //let kt_clone = key_table.clone();
+                //let db_clone = db_pool.clone();
+                unimplemented!()
+                //thread::spawn(move|| run_login(Context::new(s, kt_clone, db_clone, None)));
             },
             Err(e) => error!("error, quitting: {}", e)
         }

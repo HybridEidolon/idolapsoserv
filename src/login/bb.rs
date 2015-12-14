@@ -13,18 +13,22 @@ use psocrypto::bb::BbCipher;
 use psocrypto::{DecryptReader, EncryptWriter};
 use rand::random;
 
+use psomsg::bb::*;
+
 pub struct Context {
     stream: TcpStream,
     key_table: Arc<Vec<u32>>,
-    db_pool: Arc<Pool>
+    db_pool: Arc<Pool>,
+    param_chunks: Option<Arc<(Message, Vec<Message>)>>
 }
 
 impl Context {
-    pub fn new(stream: TcpStream, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool>) -> Context {
+    pub fn new(stream: TcpStream, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool>, param_chunks: Option<Arc<(Message, Vec<Message>)>>) -> Context {
         Context {
             stream: stream,
             key_table: key_table,
-            db_pool: db_pool
+            db_pool: db_pool,
+            param_chunks: param_chunks
         }
     }
 }
@@ -124,6 +128,8 @@ pub fn run_character(mut ctx: Context) -> () {
     use psomsg::bb::*;
     let peer_addr = ctx.stream.peer_addr().unwrap();
 
+    let param_chunks = ctx.param_chunks.clone().unwrap();
+
     info!("[{}] character blue burst: connected", peer_addr);
 
     // make new ciphers
@@ -145,6 +151,9 @@ pub fn run_character(mut ctx: Context) -> () {
         match m {
             Message::Unknown(o, f, b) => {
                 info!("[{}] unknown message type 0x{:x}, flags {}: {:?}", peer_addr, o, f, b);
+                if o == 0x00E5 {
+                    Message::BbCharAck(0, BbCharAck { slot: 1, code: 0 }).serialize(&mut w_s).unwrap();
+                }
             },
             Message::Login(_, Login { username, password, .. }) => {
                 match check_login(ctx.db_pool.clone(), &username, &password) {
@@ -199,9 +208,20 @@ pub fn run_character(mut ctx: Context) -> () {
                 r.serialize(&mut w_s).unwrap();
             },
             Message::BbParamHdrReq(_, _) => {
-                let r = Message::LargeMsg(0, LargeMsg("Whoops, param files aren't ready yet.".to_string()));
-                r.serialize(&mut w_s).unwrap();
-                return
+                //let r = Message::LargeMsg(0, LargeMsg("Whoops, param files aren't ready yet.".to_string()));
+                //r.serialize(&mut w_s).unwrap();
+                param_chunks.0.serialize(&mut w_s).unwrap();
+            },
+            Message::BbParamChunkReq(chunk, _) => {
+                // let r = Message::BbParamChunk(0, BbParamChunk { chunk: chunk, data: Vec::new() });
+                // r.serialize(&mut w_s).unwrap();
+                if let Some(ref a) = param_chunks.1.get(chunk as usize) {
+                    a.serialize(&mut w_s).unwrap();
+                } else {
+                    Message::LargeMsg(0, LargeMsg("Whoops, you requested a chunk in the param table that doesn't exist.".to_string()))
+                        .serialize(&mut w_s).unwrap();
+                    return
+                }
             },
             // 54672 or 0xD590 bytes of guild card nonsense
             Message::BbGuildCardChunkReq(_, BbGuildCardChunkReq(_, chunk, cont)) => {
@@ -239,6 +259,14 @@ pub fn run_character(mut ctx: Context) -> () {
                     });
                     r.serialize(&mut w_s).unwrap();
                 }
+            },
+            Message::Goodbye(_, _) => {
+                info!("[{}] character: goodbye", peer_addr);
+                return
+            },
+            Message::BbSetFlags(_, BbSetFlags(f)) => {
+                info!("[{}] character: set flag {}", peer_addr, f);
+                return
             }
             a => info!("[{}] known but unconsidered message received: {:?}", peer_addr, a)
         }
@@ -278,47 +306,3 @@ fn check_login(db_pool: Arc<Pool>, username: &str, password: &str) -> CheckLogin
         }
     }
 }
-
-// let r = Message::BbSecurity(0, BbSecurity {
-//     err_code: 8, // user doesn't exist
-//     tag: 0,
-//     guildcard: 0,
-//     team_id: 0,
-//     security_data: vec![0u8; 40],
-//     caps: 0
-// });
-// r.serialize(&mut w_s).unwrap();
-// return Ok(())
-
-// if a.banned {
-//     let r = Message::BbSecurity(0, BbSecurity {
-//         err_code: 6, // banned
-//         tag: 0,
-//         guildcard: 0,
-//         team_id: 0,
-//         security_data: vec![0u8; 40],
-//         caps: 0
-//     });
-//     r.serialize(&mut w_s).unwrap();
-//     return Ok(())
-// } else {
-//     // Check password
-//     // TODO real salt
-//     if a.cmp_password(&password, "") {
-
-//         r.serialize(&mut w_s).unwrap();
-//         return Ok(())
-//     } else {
-//         // password is invalid
-//         let r = Message::BbSecurity(0, BbSecurity {
-//             err_code: 2, // bad pw
-//             tag: 0,
-//             guildcard: 0,
-//             team_id: 0,
-//             security_data: vec![0u8; 40],
-//             caps: 0
-//         });
-//         r.serialize(&mut w_s).unwrap();
-//         return Ok(())
-//     }
-// }

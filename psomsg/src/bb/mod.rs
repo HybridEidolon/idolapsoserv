@@ -92,7 +92,7 @@ macro_rules! gen_message_enum {
                 // parse header
                 let mut hdr_buf = vec![0u8; 8];
                 debug!("Reading message header");
-                if try!(src.read(&mut hdr_buf)) != 8 {
+                if try!(src.read(&mut hdr_buf[..])) != 8 {
                     return Err(io::Error::new(io::ErrorKind::Other, "unexpected EOF parsing header"))
                 }
                 let size;
@@ -129,6 +129,7 @@ macro_rules! gen_message_enum {
 
 gen_message_enum! {
     0x0003 => Welcome,
+    0x0005 => Goodbye,
     0x0019 => Redirect,
     0x0093 => Login,
     0x001A => LargeMsg,
@@ -144,7 +145,11 @@ gen_message_enum! {
     0x02E8 => BbChecksumAck,
     0x03E8 => BbGuildRequest,
     0x04E8 => BbAddGuildCard,
-    0x04EB => BbParamHdrReq
+    0x01EB => BbParamHdr,
+    0x02EB => BbParamChunk,
+    0x03EB => BbParamChunkReq,
+    0x04EB => BbParamHdrReq,
+    0x00EC => BbSetFlags
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -285,6 +290,10 @@ fn write_array(sl: &[u8], len: u32, dst: &mut Write) -> io::Result<()> {
         Ok(())
     }
 }
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Goodbye;
+impl_unit_serial!(Goodbye);
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Login {
@@ -636,6 +645,42 @@ impl Serial for Ipv4Addr {
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
         unimplemented!()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct BbParamChunkReq;
+impl_unit_serial!(BbParamChunkReq);
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BbParamChunk {
+    // uint32_t chunk;
+    // uint8_t data[];
+    pub chunk: u32,
+    pub data: Vec<u8>
+}
+impl Serial for BbParamChunk {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(dst.write_u32::<LE>(self.chunk));
+        try!(dst.write_all(&self.data[..]));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        unimplemented!()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BbSetFlags(pub u32);
+impl Serial for BbSetFlags {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(dst.write_u32::<LE>(self.0));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        Ok(BbSetFlags(try!(src.read_u32::<LE>())))
     }
 }
 
