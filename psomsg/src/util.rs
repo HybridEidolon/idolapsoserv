@@ -66,13 +66,12 @@ pub fn read_utf16_len(len: usize, src: &mut Read) -> io::Result<String> {
     use encoding::Encoding;
     let mut r = vec![0u8; len as usize];
     try!(src.read(&mut r));
-    // up to first null
+    // up to first 2 nulls
     let mut end = 0;
     {
-        for (i, c) in r.iter().enumerate() {
-            if *c == 0 {
-                end = i;
-                break;
+        for i in 0..(r.len()/2) {
+            if r[(i*2)] == 0 && r[(i*2)+1] == 0 {
+                end = i*2;
             }
         }
     }

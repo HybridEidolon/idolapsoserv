@@ -286,7 +286,7 @@ pub fn run_character(mut ctx: Context) -> () {
             Message::BbCharInfo(f, BbCharInfo(slot, chardata)) => {
                 match f {
                     0 => {
-                        info!("[{}] made a new character named {:?}", peer_addr, chardata.name);
+                        info!("[{}] made a new character named {}", peer_addr, chardata.name);
                         // TODO persist the character. they will proceed with this character to ship select
                         ctx.security_data.slot = slot as u8;
                         ctx.security_data.sel_char = true;
@@ -304,7 +304,7 @@ pub fn run_character(mut ctx: Context) -> () {
                         Message::BbCharAck(0, BbCharAck {slot: slot, code: 0}).serialize(&mut w_s).unwrap();
                     },
                     1 => {
-                        info!("[{}] updated with dressing room for {:?}", peer_addr, chardata.name);
+                        info!("[{}] updated with dressing room for {}", peer_addr, chardata.name);
                         ctx.security_data.slot = slot as u8;
                         ctx.security_data.sel_char = true;
 
