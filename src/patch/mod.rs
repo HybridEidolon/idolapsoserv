@@ -2,17 +2,16 @@
 
 use std::net::{TcpListener, TcpStream, SocketAddrV4};
 use std::io;
-use std::io::{Read, Write};
 use std::borrow::Borrow;
 use std::thread;
 use std::string::ToString;
 
 use psocrypto::pc::PcCipher;
-use psocrypto::{Encryptor, Decryptor};
+use psocrypto::{DecryptReader, EncryptWriter};
+
+use psomsg::Serial;
 
 use rand::random;
-
-use ::context::Context;
 
 pub struct PatchServer {
     motd_template: String,
@@ -25,22 +24,9 @@ pub struct DataServer {
 }
 
 pub struct ClientContext {
-    server_cipher: PcCipher,
-    client_cipher: PcCipher,
     stream: TcpStream,
     motd: String,
     data_addr: Option<SocketAddrV4>
-}
-
-impl Context for ClientContext {
-    #[inline]
-    fn get_write_encryptor(&mut self) -> io::Result<(&mut Write, &mut Encryptor)> {
-        Ok((&mut self.stream, &mut self.server_cipher))
-    }
-    #[inline]
-    fn get_read_decryptor(&mut self) -> io::Result<(&mut Read, &mut Decryptor)> {
-        Ok((&mut self.stream, &mut self.client_cipher))
-    }
 }
 
 impl ClientContext {
@@ -49,34 +35,43 @@ impl ClientContext {
 
         let peer_addr = self.stream.peer_addr().unwrap();
 
-        info!("client {} connected", peer_addr);
+        info!("[{}] connected", peer_addr);
 
-        let w = Welcome {
-            server_vector: self.server_cipher.seed(),
-            client_vector: self.client_cipher.seed()
-        };
-        if let Err(e) = self.send_msg_unenc(&w) {
+        let server_cipher = PcCipher::new(random());
+        let client_cipher = PcCipher::new(random());
+
+        let w = Message::Welcome(Some(Welcome {
+            server_vector: server_cipher.seed(),
+            client_vector: client_cipher.seed()
+        }));
+        if let Err(e) = w.serialize(&mut self.stream) {
             error!("unable to send welcome message to {}: {}", peer_addr, e);
-            return
         }
+        info!("[{}] welcomed", peer_addr);
+
+        // now wrap our stream in crypto
+        let mut w_s = EncryptWriter::new(self.stream.try_clone().unwrap(), server_cipher);
+        let mut r_s = DecryptReader::new(self.stream.try_clone().unwrap(), client_cipher);
 
         // Client will send a Welcome message as an ack. We reply with a Login ack.
-        if let Ok(s) = self.recv_msg() {
+        if let Ok(s) = Message::deserialize(&mut r_s) {
             if let Message::Welcome(None) = s {
-                match self.send_msg(&Message::Login(None)) { Err(_) => return, _ => () }
+                info!("[{}] responded to welcome", peer_addr);
+                match Message::Login(None).serialize(&mut w_s) { Err(_) => return, _ => () }
             }
         }
 
         loop {
             // Read message
-            if let Ok(s) = self.recv_msg() {match s {
+            if let Ok(s) = Message::deserialize(&mut r_s) {match s {
                 Message::Login(Some(_)) => {
-                    let motd = Motd {
+                    info!("[{}] logged in, sending motd and redirecting", peer_addr);
+                    let motd = Message::Motd(Some(Motd {
                         message: self.motd.clone()
-                    };
-                    self.send_msg(&motd).unwrap();
-                    let red = Redirect { ip_addr: self.data_addr.as_ref().unwrap().ip().clone(), port: self.data_addr.as_ref().unwrap().port() };
-                    self.send_msg(&red).unwrap();
+                    }));
+                    motd.serialize(&mut w_s).unwrap();
+                    let red = Message::Redirect(Some(Redirect(self.data_addr.as_ref().unwrap().clone())));
+                    red.serialize(&mut w_s).unwrap();
                     // Now we break out of this connection.
                     return;
                 },
@@ -92,29 +87,35 @@ impl ClientContext {
 
         info!("connected {}", peer);
 
-        let w = Welcome {
-            client_vector: self.client_cipher.seed(),
-            server_vector: self.server_cipher.seed()
-        };
-        self.send_msg_unenc(&w).unwrap();
+        let server_cipher = PcCipher::new(random());
+        let client_cipher = PcCipher::new(random());
 
-        if let Ok(Message::Welcome(None)) = self.recv_msg() {
-            self.send_msg(&Message::Login(None)).unwrap();
+        let w = Message::Welcome(Some(Welcome {
+            client_vector: client_cipher.seed(),
+            server_vector: server_cipher.seed()
+        }));
+        w.serialize(&mut self.stream).unwrap();
+
+        // now wrap our stream in crypto
+        let mut w_s = EncryptWriter::new(self.stream.try_clone().unwrap(), server_cipher);
+        let mut r_s = DecryptReader::new(self.stream.try_clone().unwrap(), client_cipher);
+
+        if let Ok(Message::Welcome(None)) = Message::deserialize(&mut r_s) {
+            Message::Login(None).serialize(&mut w_s).unwrap();
         }
 
         loop {
-            let m = self.recv_msg();
+            let m = Message::deserialize(&mut r_s);
             if let Ok(m) = m {match m {
                 Message::Login(Some(_)) => {
-                    self.send_msg(&StartList).unwrap();
-                    self.send_msg(&SetDirectory { dirname: StaticVec::default() }).unwrap();
-                    self.send_msg(&InfoFinished).unwrap();
-                    //ctx.send_msg(&FileListDone, true).unwrap();
+                    Message::StartList(None).serialize(&mut w_s).unwrap();
+                    Message::SetDirectory(Some(SetDirectory { dirname: StaticVec::default() })).serialize(&mut w_s).unwrap();
+                    Message::InfoFinished(None).serialize(&mut w_s).unwrap();
                 },
                 Message::FileListDone(_) => {
-                    self.send_msg(&SetDirectory { dirname: StaticVec::default() }).unwrap();
-                    self.send_msg(&OneDirUp).unwrap();
-                    self.send_msg(&SendDone).unwrap();
+                    Message::SetDirectory(Some(SetDirectory { dirname: StaticVec::default() })).serialize(&mut w_s).unwrap();
+                    Message::OneDirUp(None).serialize(&mut w_s).unwrap();
+                    Message::SendDone(None).serialize(&mut w_s).unwrap();
                     info!("client {} was 'updated' successfully", peer);
                 }
                 e => error!("recv something else! {:?}", e)
@@ -154,8 +155,6 @@ impl PatchServer {
                 Ok(s) => {
                     total_connects += 1;
                     let mut ctx = ClientContext {
-                        server_cipher: PcCipher::new(random()),
-                        client_cipher: PcCipher::new(random()),
                         stream: s,
                         motd: self.format_motd(total_connects),
                         data_addr: Some(self.data_servers[random::<usize>() % self.data_servers.len()])
@@ -187,8 +186,6 @@ impl DataServer {
             match s {
                 Ok(s) => {
                     let mut ctx = ClientContext {
-                        server_cipher: PcCipher::new(random()),
-                        client_cipher: PcCipher::new(random()),
                         stream: s,
                         motd: "".to_string(),
                         data_addr: None

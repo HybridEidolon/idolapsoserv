@@ -10,9 +10,6 @@ use std::fs::File;
 //use std::thread;
 use std::sync::Arc;
 
-use idola::db::sqlite::Sqlite;
-use idola::db::pool::Pool;
-
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
     std::env::set_var("RUST_LOG", "DEBUG");
@@ -30,7 +27,7 @@ fn main() {
     let tcp_listener = TcpListener::bind("0.0.0.0:12000").unwrap();
     for s in tcp_listener.incoming() {
         match s {
-            Ok(s) => {
+            Ok(_) => {
                 //use idola::login::bb::{Context, run_login};
                 //let kt_clone = key_table.clone();
                 //let db_clone = db_pool.clone();

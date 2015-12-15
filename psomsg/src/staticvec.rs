@@ -2,20 +2,32 @@
 //! crate. An added benefit to using this is that Vec isn't copy, where array is, so it keeps us
 //! from making lots of unnecessary stack space.
 
-use super::prelude::*;
+use super::Serial;
 
 use std::borrow::{Borrow, BorrowMut};
 use std::ops::{Deref, DerefMut};
 use std::fmt;
+use std::marker::PhantomData;
+use std::io::{Read, Write};
+use std::io;
 
-// dummy impl
+pub use typenum::uint::Unsigned;
+pub use typenum::NonZero;
 
-#[derive(Clone)]
 /// A static-length vector, to be used in place of native arrays. Borrow this to get a slice view
 /// of the vector's contents.
 pub struct StaticVec<T: Clone, L: Unsigned + NonZero> {
     vec: Vec<T>,
     pd: PhantomData<L>
+}
+
+impl<T: Clone, L: Unsigned + NonZero> Clone for StaticVec<T, L> {
+    fn clone(&self) -> StaticVec<T, L> {
+        StaticVec {
+            vec: self.vec.clone(),
+            pd: PhantomData
+        }
+    }
 }
 
 impl <T: Clone + fmt::Debug, L: Unsigned + NonZero> fmt::Debug for StaticVec<T, L> {
@@ -70,10 +82,10 @@ impl <T: Clone, L: Unsigned + NonZero> DerefMut for StaticVec<T, L> {
 }
 
 impl <T: Clone + Serial, L: Unsigned + NonZero> Serial for StaticVec<T, L> {
-    fn serialize(value: &Self, dst: &mut Write) -> io::Result<()> {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
         // The size is statically known; we only want to serialize the contents
-        for i in &value.vec {
-            try!(T::serialize(i, dst));
+        for i in &self.vec {
+            try!(i.serialize(dst));
         }
         Ok(())
     }
@@ -89,11 +101,4 @@ impl <T: Clone + Serial, L: Unsigned + NonZero> Serial for StaticVec<T, L> {
         }
         Ok(ret)
     }
-
-    #[inline]
-    fn serial_len(value: &Self) -> usize {
-        T::serial_len(&value[0]) * L::to_usize()
-    }
-
-    fn serial_flags(_: &Self) -> u32 { 0 }
 }

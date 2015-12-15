@@ -39,7 +39,5 @@ pub mod bb;
 
 pub mod db;
 
-pub mod context;
-
 /// Utility functions
 pub mod util;

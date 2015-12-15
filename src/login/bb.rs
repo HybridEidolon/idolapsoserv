@@ -14,12 +14,14 @@ use psocrypto::{DecryptReader, EncryptWriter};
 use rand::random;
 
 use psomsg::bb::*;
+use psomsg::Serial;
 
 pub struct Context {
     stream: TcpStream,
     key_table: Arc<Vec<u32>>,
     db_pool: Arc<Pool>,
-    param_chunks: Option<Arc<(Message, Vec<Message>)>>
+    param_chunks: Option<Arc<(Message, Vec<Message>)>>,
+    security_data: BbSecurityData
 }
 
 impl Context {
@@ -28,7 +30,8 @@ impl Context {
             stream: stream,
             key_table: key_table,
             db_pool: db_pool,
-            param_chunks: param_chunks
+            param_chunks: param_chunks,
+            security_data: BbSecurityData::default()
         }
     }
 }
@@ -46,7 +49,7 @@ pub fn run_login(mut ctx: Context, char_ip: Ipv4Addr, char_port: u16) -> () {
     let client_cipher = BbCipher::new(&client_key, &ctx.key_table);
     let server_cipher = BbCipher::new(&server_key, &ctx.key_table);
 
-    let welcome = Message::Welcome(0, Welcome(server_key, client_key));
+    let welcome = Message::BbWelcome(0, BbWelcome(server_key, client_key));
 
     welcome.serialize(&mut ctx.stream).unwrap();
 
@@ -60,16 +63,17 @@ pub fn run_login(mut ctx: Context, char_ip: Ipv4Addr, char_port: u16) -> () {
             Message::Unknown(o, f, b) => {
                 info!("[{}] unknown message type 0x{:x}, flags {}, {:?}", peer_addr, o, f, b);
             },
-            Message::Login(_, Login { username, password, .. }) => {
+            Message::BbLogin(_, BbLogin { username, password, .. }) => {
                 match check_login(ctx.db_pool.clone(), &username, &password) {
                     CheckLogin::Success => {
+                        ctx.security_data.magic = 0xCAFEB00B; // don't look at me that way
                         let r = Message::BbSecurity(0, BbSecurity {
                             err_code: 0, // login success
-                            tag: 0,
-                            guildcard: 0,
-                            team_id: 0,
-                            security_data: BbSecurityData::default(),
-                            caps: 0
+                            tag: 0x00010000,
+                            guildcard: 1000000,
+                            team_id: 1,
+                            security_data: ctx.security_data,
+                            caps: 0x00000102
                         });
                         r.serialize(&mut w_s).unwrap();
                         // TODO redirect to character server
@@ -138,7 +142,7 @@ pub fn run_character(mut ctx: Context) -> () {
     let client_cipher = BbCipher::new(&client_key, &ctx.key_table);
     let server_cipher = BbCipher::new(&server_key, &ctx.key_table);
 
-    let welcome = Message::Welcome(0, Welcome(server_key, client_key));
+    let welcome = Message::BbWelcome(0, BbWelcome(server_key, client_key));
 
     welcome.serialize(&mut ctx.stream).unwrap();
 
@@ -151,36 +155,64 @@ pub fn run_character(mut ctx: Context) -> () {
         match m {
             Message::Unknown(o, f, b) => {
                 info!("[{}] unknown message type 0x{:x}, flags {}: {:?}", peer_addr, o, f, b);
-                if o == 0x00E5 {
-                    Message::BbCharAck(0, BbCharAck { slot: 1, code: 0 }).serialize(&mut w_s).unwrap();
-                }
             },
-            Message::Login(_, Login { username, password, .. }) => {
+            Message::BbLogin(_, BbLogin { username, password, security_data, .. }) => {
                 match check_login(ctx.db_pool.clone(), &username, &password) {
                     CheckLogin::Success => {
+                        // if security_data.magic != 0xCAFEB00B {
+                        //     warn!("[{}] failed magic code security check, eviscerating", peer_addr);
+                        //     Message::LargeMsg(0, LargeMsg(
+                        //         "Oh dear, somehow you got here without the security data.
+                        //         You should probably start over from the beginning.
+                        //         Unrecoverable, disconnecting.".to_string()
+                        //     )).serialize(&mut w_s).unwrap();
+                        //     return
+                        // }
+                        info!("[{}] security data: {:?}", peer_addr, security_data);
+                        ctx.security_data = security_data;
+                        ctx.security_data.magic = 0xCAFEB00B;
+
                         info!("[{}] character: {} logged in successfully", peer_addr, username);
                         let r = Message::BbSecurity(0, BbSecurity {
                             err_code: 0,
-                            tag: 0,
+                            tag: 0x00010000,
                             guildcard: 1000000,
-                            team_id: 0,
-                            security_data: BbSecurityData::default(),
-                            caps: 0
+                            team_id: 1,
+                            security_data: ctx.security_data,
+                            caps: 0x00000102
                         });
                         r.serialize(&mut w_s).unwrap();
+
+                        if security_data.sel_char {
+                            // give them the ship list now
+                            Message::Timestamp(0, Timestamp {
+                                year: 2015,
+                                month: 12,
+                                day: 15,
+                                hour: 0,
+                                minute: 53,
+                                second: 30,
+                                msec: 0
+                            }).serialize(&mut w_s).unwrap();
+                            Message::ShipList(1, ShipList(vec![
+                                ShipListItem {
+                                    menu_id: 0,
+                                    item_id: 0,
+                                    flags: 0x0000,
+                                    name: "".to_string()
+                                },
+                                ShipListItem {
+                                    menu_id: 0,
+                                    item_id: 1,
+                                    flags: 0x0F04,
+                                    name: "Burrito".to_string()
+                                }
+                            ])).serialize(&mut w_s).unwrap();
+                        }
                     },
                     _ => {
                         // they shouldn't be at this point, so we're gonna send an error
                         let r = Message::LargeMsg(0, LargeMsg("Something happened recently that invalidated your account,\nso you cannot proceed.".to_string()));
-                        r.serialize(&mut w_s).unwrap();
-                        let r = Message::BbSecurity(0, BbSecurity {
-                            err_code: 4, // maintenance
-                            tag: 0,
-                            guildcard: 0,
-                            team_id: 0,
-                            security_data: BbSecurityData::default(),
-                            caps: 0
-                        });
                         r.serialize(&mut w_s).unwrap();
                         return
                     }
@@ -242,15 +274,6 @@ pub fn run_character(mut ctx: Context) -> () {
                 if b.selecting {
                     let r = Message::LargeMsg(0, LargeMsg("how'd you do that. you can't even make characters yet. get out.".to_string()));
                     r.serialize(&mut w_s).unwrap();
-                    let r = Message::BbSecurity(0, BbSecurity {
-                        err_code: 4,
-                        tag: 0,
-                        guildcard: 0,
-                        team_id: 0,
-                        security_data: BbSecurityData::default(),
-                        caps: 0
-                    });
-                    r.serialize(&mut w_s).unwrap();
                     return
                 } else {
                     let r = Message::BbCharAck(0, BbCharAck {
@@ -260,6 +283,53 @@ pub fn run_character(mut ctx: Context) -> () {
                     r.serialize(&mut w_s).unwrap();
                 }
             },
+            Message::BbCharInfo(f, BbCharInfo(slot, chardata)) => {
+                match f {
+                    0 => {
+                        info!("[{}] made a new character named {:?}", peer_addr, chardata.name);
+                        // TODO persist the character. they will proceed with this character to ship select
+                        ctx.security_data.slot = slot as u8;
+                        ctx.security_data.sel_char = true;
+
+                        Message::BbSecurity(0, BbSecurity {
+                            err_code: 0,
+                            tag: 0x00010000,
+                            guildcard: 1000000,
+                            team_id: 1,
+                            security_data: ctx.security_data,
+                            caps: 0x00000102
+                        }).serialize(&mut w_s).unwrap();
+
+                        // code 0 is update
+                        Message::BbCharAck(0, BbCharAck {slot: slot, code: 0}).serialize(&mut w_s).unwrap();
+                    },
+                    1 => {
+                        info!("[{}] updated with dressing room for {:?}", peer_addr, chardata.name);
+                        ctx.security_data.slot = slot as u8;
+                        ctx.security_data.sel_char = true;
+
+                        Message::BbSecurity(0, BbSecurity {
+                            err_code: 0,
+                            tag: 0x00010000,
+                            guildcard: 1000000,
+                            team_id: 1,
+                            security_data: ctx.security_data,
+                            caps: 0x00000102
+                        }).serialize(&mut w_s).unwrap();
+                        Message::BbCharAck(0, BbCharAck {slot: slot, code: 0}).serialize(&mut w_s).unwrap();
+                    },
+                    _ => {
+                        warn!("[{}] did something weird with character info", peer_addr);
+                        Message::LargeMsg(0, LargeMsg("The FUCK you doin?".to_string())).serialize(&mut w_s).unwrap();
+                        return
+                    }
+                }
+            },
+            Message::MenuSelect(_, MenuSelect(menu, item)) => {
+                // ship select
+                info!("[{}] menu: {}, item: {}", peer_addr, menu, item);
+                Message::LargeMsg(0, LargeMsg("fef".to_string())).serialize(&mut w_s).unwrap();
+            }
             Message::Goodbye(_, _) => {
                 info!("[{}] character: goodbye", peer_addr);
                 return
