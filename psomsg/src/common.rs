@@ -85,6 +85,8 @@ impl Serial for ShipList {
     }
 }
 
+pub type BlockList = ShipList;
+
 #[derive(Clone, Copy, Debug)]
 pub struct MenuSelect(pub u32, pub u32);
 impl Serial for MenuSelect {

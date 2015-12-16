@@ -62,7 +62,8 @@ enum MonolithComponent {
     Patch,
     Data,
     Login,
-    Character
+    Character,
+    ShipBlock
 }
 
 fn patch_server(channel: Sender<MonolithMsg>, motd_template: String, bind_address: String) {
@@ -139,6 +140,16 @@ fn char_server(channel: Sender<MonolithMsg>, key_table: Arc<Vec<u32>>, db_pool: 
     channel.send(MonolithMsg::DownGraceful(MonolithComponent::Character)).unwrap();
 }
 
+fn block_server(channel: Sender<MonolithMsg>, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool>) {
+    use idola::ship::ShipServer;
+    channel.send(MonolithMsg::Up(MonolithComponent::ShipBlock)).unwrap();
+
+    match ShipServer::new("127.0.0.1:12002", key_table.clone(), db_pool.clone()).run() {
+        Err(e) => channel.send(MonolithMsg::DownErr(MonolithComponent::ShipBlock, "ship server died".to_string())).unwrap(),
+        Ok(_) => channel.send(MonolithMsg::DownGraceful(MonolithComponent::ShipBlock)).unwrap()
+    };
+}
+
 fn read_config(path: &str) -> Config {
     use std::fs::File;
     use std::io::Read;
@@ -203,11 +214,16 @@ fn main() {
     let kt_clone = key_table.clone();
     let pool_clone = pool.clone();
     thread::spawn(move|| char_server(tx_c, kt_clone, pool_clone, param_chunks));
+    let tx_c = tx.clone();
+    let kt_clone = key_table.clone();
+    let pool_clone = pool.clone();
+    thread::spawn(move|| block_server(tx_c, kt_clone, pool_clone));
 
     let mut patch_status = true;
     let mut data_status = true;
     let mut login_status = true;
     let mut char_status = true;
+    let mut shipblock_status = true;
 
     for m in rx.iter() {
         use MonolithComponent::*;
@@ -217,7 +233,8 @@ fn main() {
                     Patch => patch_status = false,
                     Data => data_status = false,
                     Login => login_status = false,
-                    Character => char_status = false
+                    Character => char_status = false,
+                    ShipBlock => shipblock_status = false
                 }
                 error!("Down by error {:?}: {:?}", a, s);
             },
@@ -226,14 +243,15 @@ fn main() {
                     Patch => patch_status = false,
                     Data => data_status = false,
                     Login => login_status = false,
-                    Character => char_status = false
+                    Character => char_status = false,
+                    ShipBlock => shipblock_status = false
                 }
                 info!("{:?} down gracefully", a)
             },
             _ => ()
         }
 
-        if !patch_status && !login_status && !data_status && !char_status {
+        if !patch_status && !login_status && !data_status && !char_status && !shipblock_status {
             break
         }
     }

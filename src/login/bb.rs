@@ -21,7 +21,8 @@ pub struct Context {
     key_table: Arc<Vec<u32>>,
     db_pool: Arc<Pool>,
     param_chunks: Option<Arc<(Message, Vec<Message>)>>,
-    security_data: BbSecurityData
+    security_data: BbSecurityData,
+    menu_id: i32
 }
 
 impl Context {
@@ -31,7 +32,8 @@ impl Context {
             key_table: key_table,
             db_pool: db_pool,
             param_chunks: param_chunks,
-            security_data: BbSecurityData::default()
+            security_data: BbSecurityData::default(),
+            menu_id: 0
         }
     }
 }
@@ -328,7 +330,39 @@ pub fn run_character(mut ctx: Context) -> () {
             Message::MenuSelect(_, MenuSelect(menu, item)) => {
                 // ship select
                 info!("[{}] menu: {}, item: {}", peer_addr, menu, item);
-                Message::LargeMsg(0, LargeMsg("fef".to_string())).serialize(&mut w_s).unwrap();
+                match menu {
+                    0 => {
+                        // ship select
+                        ctx.menu_id = 1;
+                        Message::BlockList(1, ShipList(vec![
+                            ShipListItem {
+                                menu_id: 1,
+                                item_id: 0,
+                                flags: 0x0000,
+                                name: "".to_string()
+                            },
+                            ShipListItem {
+                                menu_id: 1,
+                                item_id: 1,
+                                flags: 0x0F04,
+                                name: "Block".to_string()
+                            }
+                        ])).serialize(&mut w_s).unwrap();
+                    },
+                    1 => {
+                        // block select
+                        Message::Redirect(0, Redirect {
+                            // TODO don't send to localhost.
+                            ip: Ipv4Addr::new(127, 0, 0, 1),
+                            port: 12002
+                        }).serialize(&mut w_s).unwrap();
+                        return
+                    },
+                    _ => {
+                        return
+                    }
+                }
+
             }
             Message::Goodbye(_, _) => {
                 info!("[{}] character: goodbye", peer_addr);

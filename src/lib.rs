@@ -39,5 +39,7 @@ pub mod bb;
 
 pub mod db;
 
+pub mod ship;
+
 /// Utility functions
 pub mod util;

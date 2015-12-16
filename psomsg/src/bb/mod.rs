@@ -118,6 +118,7 @@ macro_rules! gen_message_enum {
 gen_message_enum! {
     0x0003 => BbWelcome,
     0x0005 => Goodbye,
+    0x0007 => BlockList,
     0x0010 => MenuSelect,
     0x0019 => Redirect,
     0x0093 => BbLogin,

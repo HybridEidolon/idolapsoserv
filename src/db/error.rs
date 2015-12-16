@@ -13,6 +13,9 @@ pub enum Error {
     Other(String, Option<Box<error::Error>>)
 }
 
+unsafe impl Send for Error {}
+unsafe impl Sync for Error {}
+
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         use std::error::Error;
