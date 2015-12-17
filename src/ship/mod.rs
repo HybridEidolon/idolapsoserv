@@ -25,6 +25,7 @@ enum ShipMsg {
 /// Messages bound for the Client.
 enum ClientMsg {
     LargeMsg(String),
+    JoinBlockLobby(u8, u8),
     AbruptDisconnect
 }
 
@@ -134,13 +135,41 @@ fn client_thread(mut w: EncryptWriter<TcpStream, BbCipher>, mut r: DecryptReader
     use psomsg::bb::*;
     use psomsg::Serial;
 
-    info!("client connected to the block server");
+    info!("client connected to the ship server");
+
+    {
+        let mut l = LobbyJoin::default();
+        l.client_id = 4;
+        l.leader_id = 4;
+        l.lobby_num = 0;
+        l.block_num = 1;
+        l.event = 0;
+        Message::LobbyJoin(0, l).serialize(&mut w).unwrap();
+        let mut l = LobbyAddMember::default();
+        l.client_id = 4;
+        l.leader_id = 4;
+        l.lobby_num = 0;
+        l.block_num = 1;
+        l.event = 0;
+        let mut lm = LobbyMember::default();
+        lm.hdr.guildcard = 1000000;
+        lm.hdr.tag = 0x00010000;
+        lm.hdr.client_id = 4;
+        lm.hdr.name = "\tguaco".to_string();
+        lm.data.level = 0;
+        lm.data.name = "\tguaco".to_string();
+        l.members.push(lm);
+        Message::LobbyAddMember(1, l).serialize(&mut w).unwrap();
+    }
+
     loop {
+        use self::ClientMsg::*;
         let msg = Message::deserialize(&mut r);
         if let Err(ref e) = msg {
             if let Err(se) = tx.send(ShipMsg::DelClient) {
-                error!("apparently the whole ship died...");
+                error!("apparently the whole ship died..."); return
             }
+            return
         } else if let Ok(msg) = msg { match msg {
             a => info!("block client recv msg {:?}", a)
         }}

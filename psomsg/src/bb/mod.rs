@@ -15,9 +15,16 @@ use ::Serial;
 
 pub mod msgs;
 pub mod data;
+pub mod chara;
+pub mod lobby;
+pub mod player;
+
 pub use self::msgs::*;
 pub use ::common::*;
 pub use self::data::*;
+pub use self::chara::*;
+pub use self::lobby::*;
+pub use self::player::*;
 
 macro_rules! gen_message_enum {
     ($($id:expr => $name:ident),*) => {
@@ -121,6 +128,8 @@ gen_message_enum! {
     0x0007 => BlockList,
     0x0010 => MenuSelect,
     0x0019 => Redirect,
+    0x0067 => LobbyJoin,
+    0x0068 => LobbyAddMember,
     0x0093 => BbLogin,
     0x001A => LargeMsg,
     0x00B1 => Timestamp,

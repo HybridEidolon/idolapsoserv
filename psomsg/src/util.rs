@@ -1,6 +1,8 @@
 use std::io::{Read, Write};
 use std::io;
 
+use ::Serial;
+
 pub fn read_ascii_len(len: u32, src: &mut Read) -> io::Result<String> {
     use encoding::all::ASCII;
     use encoding::DecoderTrap::Replace;
@@ -103,22 +105,28 @@ pub fn write_utf16_len(s: &str, len: usize, dst: &mut Write) -> io::Result<()> {
     }
 }
 
-pub fn read_array(len: u32, src: &mut Read) -> io::Result<Vec<u8>> {
-    let mut r = vec![0u8; len as usize];
-    try!(src.read(&mut r));
+pub fn read_array<T: Serial + Default>(len: u32, src: &mut Read) -> io::Result<Vec<T>> {
+    let mut r = Vec::with_capacity(len as usize);
+    for _ in 0..len {
+        r.push(try!(T::deserialize(src)));
+    }
     Ok(r)
 }
 
-pub fn write_array(sl: &[u8], len: u32, dst: &mut Write) -> io::Result<()> {
+pub fn write_array<T: Serial + Default>(sl: &[T], len: u32, dst: &mut Write) -> io::Result<()> {
     if sl.len() > len as usize {
-        warn!("Slice is too big to fit in buffer, writing truncated");
-
+        warn!("Slice is larger than desired length, writing truncated");
+        for i in sl.iter().take(len as usize) {
+            try!(i.serialize(dst));
+        }
         Ok(())
     } else {
         let padding = len as i32 - sl.len() as i32;
-        try!(dst.write_all(&sl[..]));
-        if padding > 0 {
-            try!(dst.write_all(&vec![0u8; padding as usize][..]));
+        for i in sl.iter() {
+            try!(i.serialize(dst));
+        }
+        for _ in 0..padding {
+            try!(T::default().serialize(dst));
         }
         Ok(())
     }
