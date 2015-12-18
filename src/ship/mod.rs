@@ -56,9 +56,9 @@ impl ShipServer {
         let ShipServer {
             mut running,
             mut clients,
-            mut bind,
-            mut db_pool,
-            mut key_table
+            bind,
+            db_pool,
+            key_table
         } = self;
         // Set up the comms channel for all connections.
 
@@ -79,7 +79,7 @@ impl ShipServer {
             match msg {
                 NewClient(mut s) => {
                     let peer_addr = match s.peer_addr() {
-                        Err(e) => {error!("Failed to get peer address. Wow, I'm surprised we failed this early."); continue},
+                        Err(_) => {error!("Failed to get peer address. Wow, I'm surprised we failed this early."); continue},
                         Ok(p) => p
                     };
                     match handle_newclient(&mut s, key_table.clone(), db_pool.clone(), tx.clone()) {
@@ -98,10 +98,10 @@ impl ShipServer {
                 AcceptorClosing => {
                     running = false;
                     for c in clients.iter() {
-                        if let Err(e) = c.tx.send(ClientMsg::LargeMsg("Server is going offline due to client acceptor thread dying.".to_string())) {
+                        if let Err(_) = c.tx.send(ClientMsg::LargeMsg("Server is going offline due to client acceptor thread dying.".to_string())) {
                             continue
                         }
-                        if let Err(e) = c.tx.send(ClientMsg::AbruptDisconnect) {
+                        if let Err(_) = c.tx.send(ClientMsg::AbruptDisconnect) {
                             continue
                         }
                     }
@@ -134,43 +134,87 @@ fn client_acceptor(bind: &str, tx: Sender<ShipMsg>) {
 fn client_thread(mut w: EncryptWriter<TcpStream, BbCipher>, mut r: DecryptReader<TcpStream, BbCipher>, rx: Receiver<ClientMsg>, tx: Sender<ShipMsg>) {
     use psomsg::bb::*;
     use psomsg::Serial;
+    use std::fs::File;
+    use ::game::CharClass;
+
+    let mut fc;
 
     info!("client connected to the ship server");
 
     {
-        let mut l = LobbyJoin::default();
-        l.client_id = 4;
-        l.leader_id = 4;
-        l.lobby_num = 0;
-        l.block_num = 1;
-        l.event = 0;
-        Message::LobbyJoin(0, l).serialize(&mut w).unwrap();
-        let mut l = LobbyAddMember::default();
-        l.client_id = 4;
-        l.leader_id = 4;
-        l.lobby_num = 0;
-        l.block_num = 1;
-        l.event = 0;
-        let mut lm = LobbyMember::default();
-        lm.hdr.guildcard = 1000000;
-        lm.hdr.tag = 0x00010000;
-        lm.hdr.client_id = 4;
-        lm.hdr.name = "\tguaco".to_string();
-        lm.data.level = 0;
-        lm.data.name = "\tguaco".to_string();
-        l.members.push(lm);
-        Message::LobbyAddMember(1, l).serialize(&mut w).unwrap();
+        {
+            let mut ll: Vec<(u32, u32)> = Vec::new();
+            ll.push((60, 1));
+            ll.push((60, 2));
+            ll.push((60, 3));
+            ll.push((60, 4));
+            ll.push((60, 5));
+            ll.push((60, 6));
+            ll.push((60, 7));
+            ll.push((60, 8));
+            ll.push((60, 9));
+            ll.push((60, 10));
+            ll.push((60, 11));
+            ll.push((60, 12));
+            ll.push((60, 13));
+            ll.push((60, 14));
+            ll.push((60, 15));
+            ll.push((0, 0));
+            Message::LobbyList(16, LobbyList { items: ll }).serialize(&mut w).unwrap();
+        }
+        fc = ::util::nsc::read_nsc(&mut File::open("data/default/default_0.nsc").unwrap(), CharClass::HUmar).unwrap();
+        fc.name = "\u{0009}Eguaco".to_string();
+        fc.chara.name = "\u{0009}Eguaco".to_string();
+        fc.guildcard = 1000000;
+        fc.key_config.guildcard = 1000000;
+        fc.chara.level = 30;
+        fc.chara.hp = 400;
+        Message::BbFullChar(0, BbFullChar(fc.clone())).serialize(&mut w).unwrap();
+        Message::CharDataRequest(0, CharDataRequest).serialize(&mut w).unwrap();
     }
 
     loop {
-        use self::ClientMsg::*;
+        //use self::ClientMsg::*;
         let msg = Message::deserialize(&mut r);
-        if let Err(ref e) = msg {
-            if let Err(se) = tx.send(ShipMsg::DelClient) {
-                error!("apparently the whole ship died..."); return
+        if let Err(_) = msg {
+            if let Err(_) = tx.send(ShipMsg::DelClient) {
+                error!("apparently the whole ship died...");
             }
             return
         } else if let Ok(msg) = msg { match msg {
+            Message::BbCharDat(_, BbCharDat(data)) => {
+                info!("{}", data.chara.name);
+                let mut l = LobbyJoin::default();
+                l.client_id = 0;
+                l.leader_id = 0;
+                l.one = 1;
+                l.lobby_num = 0;
+                l.block_num = 1;
+                l.event = 0;
+                let mut lm = LobbyMember::default();
+                lm.hdr.guildcard = 1000000;
+                lm.hdr.tag = 0x00010000;
+                lm.hdr.client_id = 0;
+                lm.hdr.name = fc.name.clone();
+                lm.data.name = fc.chara.name.clone();
+                lm.data.name_color = 0xFFFFFFFF;
+                lm.data.section = 1;
+                lm.data.class = 1;
+                lm.data.level = 30;
+                lm.data.version = 3;
+                lm.data.v1flags = 25;
+                lm.data.hp = 400;
+                lm.data.model = 0;
+                lm.data.skin = 1;
+                lm.data.face = 1;
+                lm.data.head = 1;
+                lm.data.hair = 1;
+                lm.data.prop_x = 1.0;
+                lm.data.prop_y = 1.0;
+                //l.members.push(lm);
+                Message::LobbyJoin(0, l).serialize(&mut w).unwrap();
+                Message::LobbyArrowList(0, LobbyArrowList(Vec::new())).serialize(&mut w).unwrap();
+            }
             a => info!("block client recv msg {:?}", a)
         }}
     }

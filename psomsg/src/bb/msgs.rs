@@ -9,6 +9,8 @@ use ::util::*;
 use super::default_config;
 use super::PSOBB_COPYRIGHT_STRING;
 use super::data::*;
+use super::chara::*;
+use super::player::*;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BbWelcome(pub Vec<u8>, pub Vec<u8>);
@@ -381,6 +383,32 @@ impl Serial for BbCharInfo {
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
         Ok(BbCharInfo(try!(u32::deserialize(src)), try!(BbMiniCharData::deserialize(src))))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BbFullChar(pub BbFullCharData);
+impl Serial for BbFullChar {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.0.serialize(dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        Ok(BbFullChar(try!(Serial::deserialize(src))))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BbCharDat(pub BbPlayerData);
+impl Serial for BbCharDat {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.0.serialize(dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        Ok(BbCharDat(try!(Serial::deserialize(src))))
     }
 }
 

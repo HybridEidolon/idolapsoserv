@@ -43,11 +43,12 @@ impl<R: Read, D: Decryptor> DecryptReader<R, D> {
 
 impl<R: Read, D: Decryptor> Read for DecryptReader<R, D> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        println!("Decrypt {} bytes", buf.len());
         let mut int_buf = vec![0u8; buf.len()];
         let bytes_read = try!(self.r.read(&mut int_buf[..]));
 
         // decrypt into output buffer
-        if let Err(e) = self.d.decrypt(&int_buf[..], &mut buf[..bytes_read]) {
+        if let Err(e) = self.d.decrypt(&int_buf[..bytes_read], &mut buf[..bytes_read]) {
             return Err(io::Error::new(io::ErrorKind::Other, e))
         }
 
@@ -71,6 +72,7 @@ impl<W: Write, E: Encryptor> EncryptWriter<W, E> {
 
 impl<W: Write, E: Encryptor> Write for EncryptWriter<W, E> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        println!("Encrypt {} bytes", buf.len());
         let mut int_buf = vec![0u8; buf.len()];
 
         // encrypt into int buffer

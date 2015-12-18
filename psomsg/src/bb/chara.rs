@@ -353,7 +353,8 @@ impl Default for BbChar {
     }
 }
 
-pub struct BbFullChar {
+#[derive(Clone, Debug)]
+pub struct BbFullCharData {
     pub inv: Inventory,
     pub chara: BbChar,
     pub unk: Vec<u8>,
@@ -380,7 +381,7 @@ pub struct BbFullChar {
     pub quest_data2: Vec<u8>,
     pub key_config: BbTeamAndKeyData
 }
-impl Serial for BbFullChar {
+impl Serial for BbFullCharData {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
         try!(self.inv.serialize(dst));
         try!(self.chara.serialize(dst));
@@ -435,7 +436,7 @@ impl Serial for BbFullChar {
         let unk4 = try!(read_array(44, src));
         let quest_data2 = try!(read_array(88, src));
         let key_config = try!(Serial::deserialize(src));
-        Ok(BbFullChar {
+        Ok(BbFullCharData {
             inv: inv,
             chara: chara,
             unk: unk,
@@ -464,9 +465,9 @@ impl Serial for BbFullChar {
         })
     }
 }
-impl Default for BbFullChar {
+impl Default for BbFullCharData {
     fn default() -> Self {
-        BbFullChar {
+        BbFullCharData {
             inv: Default::default(),
             chara: Default::default(),
             unk: vec![Default::default(); 16],

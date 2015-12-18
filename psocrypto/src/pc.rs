@@ -37,8 +37,8 @@ impl PcCipher {
         let mut co = Cursor::new(output);
         loop {
             if let Ok(num) = ci.read_u32::<LittleEndian>() {
-                if let Err(_) = co.write_u32::<LittleEndian>(num ^ self.get_next_key()) {
-                    return Err("Input buffer invalid length".to_string())
+                if let Err(e) = co.write_u32::<LittleEndian>(num ^ self.get_next_key()) {
+                    return Err(e.to_string())
                 }
             } else {
                 break

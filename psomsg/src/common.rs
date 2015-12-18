@@ -87,6 +87,46 @@ impl Serial for ShipList {
 
 pub type BlockList = ShipList;
 
+#[derive(Clone, Debug)]
+pub struct LobbyList {
+    pub items: Vec<(u32, u32)>
+}
+impl Serial for LobbyList {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        for i in self.items.iter() {
+            let &(ref menu_id, ref item_id) = i;
+            try!(menu_id.serialize(dst));
+            try!(item_id.serialize(dst));
+            try!(0u32.serialize(dst));
+        }
+        Ok(())
+    }
+
+    fn deserialize(_: &mut Read) -> io::Result<Self> {
+        unimplemented!()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LobbyArrowList(pub Vec<(u32, u32, u32)>);
+impl Serial for LobbyArrowList {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        for i in self.0.iter() {
+            let &(ref tag, ref guildcard, ref arrow) = i;
+            try!(tag.serialize(dst));
+            try!(guildcard.serialize(dst));
+            try!(arrow.serialize(dst));
+        }
+        Ok(())
+    }
+
+    fn deserialize(_: &mut Read) -> io::Result<Self> {
+        unimplemented!()
+    }
+}
+
+derive_serial!(CharDataRequest);
+
 #[derive(Clone, Copy, Debug)]
 pub struct MenuSelect(pub u32, pub u32);
 impl Serial for MenuSelect {

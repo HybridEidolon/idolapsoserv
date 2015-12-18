@@ -10,6 +10,7 @@ use super::player::*;
 pub struct LobbyJoin {
     pub client_id: u8,
     pub leader_id: u8,
+    pub one: u8,
     pub lobby_num: u8,
     pub block_num: u16,
     pub event: u16,
@@ -19,7 +20,7 @@ impl Serial for LobbyJoin {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
         try!(self.client_id.serialize(dst));
         try!(self.leader_id.serialize(dst));
-        try!(1u8.serialize(dst));
+        try!(self.one.serialize(dst));
         try!(self.lobby_num.serialize(dst));
         try!(self.block_num.serialize(dst));
         try!(self.event.serialize(dst));
@@ -38,6 +39,7 @@ impl Default for LobbyJoin {
         LobbyJoin {
             client_id: Default::default(),
             leader_id: Default::default(),
+            one: 1,
             lobby_num: Default::default(),
             block_num: Default::default(),
             event: Default::default(),

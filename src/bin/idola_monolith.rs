@@ -175,7 +175,7 @@ fn main() {
     use std::thread;
 
     if let Err(_) = std::env::var("RUST_LOG") {
-        std::env::set_var("RUST_LOG", "DEBUG");
+        std::env::set_var("RUST_LOG", "INFO");
         std::env::set_var("RUST_BACKTRACE", "1");
     }
     env_logger::init().unwrap();

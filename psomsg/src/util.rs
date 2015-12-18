@@ -47,6 +47,35 @@ pub fn write_ascii_len(s: &str, len: usize, dst: &mut Write) -> io::Result<()> {
     }
 }
 
+pub fn read_utf16(src: &mut Read) -> io::Result<String> {
+    use encoding::all::UTF_16LE;
+    use encoding::DecoderTrap::Replace;
+    use encoding::Encoding;
+    let mut buf = Vec::new();
+    // Keep reading until EOF
+    loop {
+        let mut r_buf = [0u8; 2];
+        // God damn it
+        // This will only work if the stream ends (i.e. using a Cursor)
+        // It will block on a raw network stream...
+        let bytes_read = try!(src.read(&mut r_buf[..]));
+        if bytes_read != 2 {
+            break;
+        }
+        if r_buf[0] == 0 && r_buf[1] == 0 {
+            break;
+        }
+        buf.push(r_buf[0]);
+        buf.push(r_buf[1]);
+    }
+
+    let r = match UTF_16LE.decode(&buf[..], Replace) {
+        Ok(s) => s,
+        Err(e) => return Err(io::Error::new(io::ErrorKind::Other, format!("Unable to decode utf16: {:?}", e)))
+    };
+    Ok(r)
+}
+
 pub fn write_utf16(s: &str, dst: &mut Write) -> io::Result<()> {
     use encoding::all::UTF_16LE;
     use encoding::EncoderTrap::Replace;
