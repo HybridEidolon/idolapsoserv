@@ -25,7 +25,10 @@ impl Serial for BbWelcome {
         Ok(())
     }
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+        try!(read_array::<u8>(0x60, src));
+        let server_key = try!(read_array(48, src));
+        let client_key = try!(read_array(48, src));
+        Ok(BbWelcome(server_key, client_key))
     }
 }
 
@@ -44,8 +47,19 @@ pub struct BbLogin {
     pub security_data: BbSecurityData
 }
 impl Serial for BbLogin {
-    fn serialize(&self, _: &mut Write) -> io::Result<()> {
-        unimplemented!()
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.tag.serialize(dst));
+        try!(self.guildcard.serialize(dst));
+        try!(self.version.serialize(dst));
+        try!(write_array(&self.unk, 6, dst));
+        try!(self.team_id.serialize(dst));
+        try!(write_ascii_len(&self.username, 16, dst));
+        try!(dst.write_all(&[0u8; 32]));
+        try!(write_ascii_len(&self.password, 16, dst));
+        try!(dst.write_all(&[0u8; 40]));
+        try!(write_array(&self.hw_info, 8, dst));
+        try!(self.security_data.serialize(dst));
+        Ok(())
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
@@ -100,7 +114,9 @@ pub struct BbCharSelect {
 }
 impl Serial for BbCharSelect {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        unimplemented!()
+        try!(self.slot.serialize(dst));
+        try!(if self.selecting { 1u32 } else { 0u32 }.serialize(dst));
+        Ok(())
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
@@ -168,7 +184,10 @@ impl Serial for BbChecksumAck {
 pub struct BbGuildCardChunkReq(pub u32, pub u32, pub bool);
 impl Serial for BbGuildCardChunkReq {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        unimplemented!()
+        try!(self.0.serialize(dst));
+        try!(self.1.serialize(dst));
+        try!(if self.2 { 1u32 } else { 0u32 }.serialize(dst));
+        Ok(())
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
@@ -224,7 +243,14 @@ impl Serial for BbGuildCardChunk {
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+        let unk = try!(Serial::deserialize(src));
+        let chunk = try!(Serial::deserialize(src));
+        let mut data = Vec::new(); try!(src.read_to_end(&mut data)); // TODO this is dangerous
+        Ok(BbGuildCardChunk {
+            unk: unk,
+            chunk: chunk,
+            data: data
+        })
     }
 }
 
@@ -250,7 +276,15 @@ pub struct BbAddGuildCard {
 }
 impl Serial for BbAddGuildCard {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        unimplemented!()
+        try!(self.guildcard.serialize(dst));
+        try!(write_utf16_len(&self.name, 48, dst));
+        try!(write_utf16_len(&self.team_name, 32, dst));
+        try!(write_utf16_len(&self.text, 88*2, dst));
+        try!(self.one.serialize(dst));
+        try!(self.lang.serialize(dst));
+        try!(self.section.serialize(dst));
+        try!(self.char_class.serialize(dst));
+        Ok(())
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
@@ -300,7 +334,18 @@ impl Serial for BbParamHdr {
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+        let mut params = Vec::new();
+        loop {
+            // very unsafe...
+            let paramhdr = match ParamHeader::deserialize(src) {
+                Ok(p) => p,
+                Err(_) => break
+            };
+            params.push(paramhdr);
+        }
+        Ok(BbParamHdr {
+            params: params
+        })
     }
 }
 
@@ -324,7 +369,12 @@ impl Serial for BbParamChunk {
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+        let chunk = try!(Serial::deserialize(src));
+        let mut data = Vec::new(); try!(src.read_to_end(&mut data));
+        Ok(BbParamChunk {
+            chunk: chunk,
+            data: data
+        })
     }
 }
 
@@ -368,7 +418,20 @@ impl Serial for BbSecurity {
         Ok(())
     }
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+        let err_code = try!(Serial::deserialize(src));
+        let tag = try!(Serial::deserialize(src));
+        let guildcard = try!(Serial::deserialize(src));
+        let team_id = try!(Serial::deserialize(src));
+        let security_data = try!(Serial::deserialize(src));
+        let caps = try!(Serial::deserialize(src));
+        Ok(BbSecurity {
+            err_code: err_code,
+            tag: tag,
+            guildcard: guildcard,
+            team_id: team_id,
+            security_data: security_data,
+            caps: caps
+        })
     }
 }
 
@@ -548,6 +611,15 @@ impl Serial for ParamHeader {
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+        let size = try!(Serial::deserialize(src));
+        let checksum = try!(Serial::deserialize(src));
+        let offset = try!(Serial::deserialize(src));
+        let filename = try!(read_ascii_len(0x40, src));
+        Ok(ParamHeader {
+            size: size,
+            checksum: checksum,
+            offset: offset,
+            filename: filename
+        })
     }
 }

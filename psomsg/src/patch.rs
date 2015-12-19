@@ -4,13 +4,13 @@ use typenum::consts::{U12, U16, U32, U48, U64};
 
 use ::Serial;
 use ::staticvec::StaticVec;
+use ::util::*;
 
 use std::io::{Read, Write};
 use std::io;
-use std::net::SocketAddrV4;
+use std::net::{SocketAddrV4, Ipv4Addr};
 
 use byteorder::{LittleEndian as LE, BigEndian as BE, ReadBytesExt, WriteBytesExt};
-
 
 macro_rules! gen_message_enum_patch {
     ($($id:expr => $name:ident),*) => {
@@ -23,7 +23,7 @@ macro_rules! gen_message_enum_patch {
         impl Serial for Message {
             fn serialize(&self, dst: &mut Write) -> io::Result<()> {
                 use std::io::Cursor;
-                let mut buf = Vec::with_capacity(4096);
+                let mut buf = Vec::with_capacity(256);
                 let msg_type: u16;
                 let mut size: u16;
 
@@ -49,7 +49,7 @@ macro_rules! gen_message_enum_patch {
                     buf = cur.into_inner();
                 }
 
-                debug!("serializing msg_type {:x}, size {}", msg_type, size);
+                debug!("serializing msg_type 0x{:x}, size {}", msg_type, size);
 
                 // do not ever pad the message
                 if buf.len() % 4 != 0 {
@@ -72,24 +72,23 @@ macro_rules! gen_message_enum_patch {
             fn deserialize(src: &mut Read) -> io::Result<Self> {
                 use std::io::Cursor;
                 let mut hdr_buf = vec![0u8; 4];
-                if try!(src.read(&mut hdr_buf[..])) != 4 {
-                    return Err(io::Error::new(io::ErrorKind::Other, "unexpected EOF parsing header"))
-                }
+                debug!("Reading patch header");
+                try!(read_exact(src, &mut hdr_buf[..]));
                 let size;
                 let msg_type;
                 {
+                    debug!("Parsing patch header");
                     let mut hdr_curs = Cursor::new(hdr_buf);
                     size = try!(hdr_curs.read_u16::<LE>());
                     msg_type = try!(hdr_curs.read_u16::<LE>());
                 }
-                debug!("size: {}, type: {:x}", size, msg_type);
+                debug!("size: {}, type: 0x{:x}", size, msg_type);
 
                 let padding = if size % 4 == 0 { 0 } else { 4 - (size % 4) };
                 let mut msg_buf = vec![0u8; (size + padding) as usize - 4];
                 if size > 4 {
-                    if try!(src.read(&mut msg_buf)) != (size + padding) as usize - 4 {
-                        return Err(io::Error::new(io::ErrorKind::Other, "unexpected EOF getting rest of message"))
-                    }
+                    debug!("Reading patch message contents");
+                    try!(read_exact(src, &mut msg_buf));
                     let mut msg_cur = Cursor::new(msg_buf);
                     match msg_type {
                         $($id => Ok(Message::$name(Some(try!($name::deserialize(&mut msg_cur))))),)*
@@ -98,6 +97,7 @@ macro_rules! gen_message_enum_patch {
                         }
                     }
                 } else {
+                    debug!("Patch Message was header only");
                     // header only
                     match msg_type {
                         $($id => Ok(Message::$name(None)),)*
@@ -193,20 +193,15 @@ pub struct Motd {
 }
 impl Serial for Motd {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        use encoding::{Encoding, EncoderTrap};
-        use encoding::all::UTF_16LE;
-        let mut enc = match UTF_16LE.encode(&self.message, EncoderTrap::Replace) {
-            Ok(a) => a,
-            Err(_) => return Err(io::Error::new(io::ErrorKind::Other, "Failed to encode Motd into UTF-16"))
-        };
-        enc.push(0);
-        enc.push(0);
-        try!(dst.write_all(&enc[..]));
+        try!(write_utf16(&self.message, dst));
         Ok(())
     }
 
-    fn deserialize(_: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let message = try!(read_utf16(src));
+        Ok(Motd {
+            message: message
+        })
     }
 }
 
@@ -222,8 +217,10 @@ impl Serial for Redirect {
         Ok(())
     }
 
-    fn deserialize(_: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let ip_addr: Ipv4Addr = try!(u32::deserialize(src)).into();
+        let port: u16 = try!(Serial::deserialize(src));
+        Ok(Redirect(SocketAddrV4::new(ip_addr, port)))
     }
 }
 

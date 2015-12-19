@@ -160,3 +160,22 @@ pub fn write_array<T: Serial + Default>(sl: &[T], len: u32, dst: &mut Write) -> 
         Ok(())
     }
 }
+
+/// Until `feature(read_exact)` is stabilized, this is a direct copy of Read::read_exact from the
+/// standard library. `read_exact` will be stable in 1.6.0
+pub fn read_exact(read: &mut Read, mut buf: &mut [u8]) -> io::Result<()> {
+    while !buf.is_empty() {
+        match read.read(buf) {
+            Ok(0) => break,
+            Ok(n) => { let tmp = buf; buf = &mut tmp[n..]; }
+            Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
+        }
+    }
+    if !buf.is_empty() {
+        Err(io::Error::new(io::ErrorKind::Other,
+                       "failed to fill whole buffer"))
+    } else {
+        Ok(())
+    }
+}

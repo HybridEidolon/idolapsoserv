@@ -39,11 +39,14 @@ impl<R: Read, D: Decryptor> DecryptReader<R, D> {
             d: decrypt
         }
     }
+
+    pub fn into_inner(self) -> R {
+        self.r
+    }
 }
 
 impl<R: Read, D: Decryptor> Read for DecryptReader<R, D> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        println!("Decrypt {} bytes", buf.len());
         let mut int_buf = vec![0u8; buf.len()];
         let bytes_read = try!(self.r.read(&mut int_buf[..]));
 
@@ -68,11 +71,14 @@ impl<W: Write, E: Encryptor> EncryptWriter<W, E> {
             e: encrypt
         }
     }
+
+    pub fn into_inner(self) -> W {
+        self.w
+    }
 }
 
 impl<W: Write, E: Encryptor> Write for EncryptWriter<W, E> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        println!("Encrypt {} bytes", buf.len());
         let mut int_buf = vec![0u8; buf.len()];
 
         // encrypt into int buffer

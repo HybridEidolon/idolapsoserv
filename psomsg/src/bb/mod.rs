@@ -12,6 +12,7 @@ pub static PSOBB_COPYRIGHT_STRING: &'static [u8] = b"Phantasy Star Online Blue B
 pub mod default_config;
 
 use ::Serial;
+use ::util::read_exact;
 
 pub mod msgs;
 pub mod data;
@@ -87,9 +88,7 @@ macro_rules! gen_message_enum {
                 // parse header
                 let mut hdr_buf = vec![0u8; 8];
                 debug!("Reading message header");
-                if try!(src.read(&mut hdr_buf[..])) != 8 {
-                    return Err(io::Error::new(io::ErrorKind::Other, "unexpected EOF parsing header"))
-                }
+                try!(read_exact(src, &mut hdr_buf[..]));
                 let size;
                 let msg_type;
                 let flags;
@@ -100,15 +99,13 @@ macro_rules! gen_message_enum {
                     msg_type = try!(hdr_cursor.read_u16::<LE>());
                     flags = try!(hdr_cursor.read_u32::<LE>());
                 }
-                debug!("size: {size}, type: {msg_type:x}, flags: {flags}", size=size, msg_type=msg_type, flags=flags);
+                debug!("size: {size}, type: 0x{msg_type:x}, flags: {flags}", size=size, msg_type=msg_type, flags=flags);
 
                 let padding = if size % 8 == 0 { 0 } else { 8 - (size % 8) };
 
                 let mut msg_buf = vec![0u8; (size + padding) as usize - 8];
                 if size > 8 {
-                    if try!(src.read(&mut msg_buf)) != (size + padding) as usize - 8 {
-                        return Err(io::Error::new(io::ErrorKind::Other, "unexpected EOF getting rest of message"))
-                    }
+                    try!(read_exact(src, &mut msg_buf));
                 }
                 let mut msg_cur = Cursor::new(msg_buf);
                 match msg_type {
