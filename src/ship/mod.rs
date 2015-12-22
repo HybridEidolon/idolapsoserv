@@ -163,8 +163,8 @@ fn client_thread(mut w: EncryptWriter<TcpStream, BbCipher>, mut r: DecryptReader
             Message::LobbyList(16, LobbyList { items: ll }).serialize(&mut w).unwrap();
         }
         fc = ::util::nsc::read_nsc(&mut File::open("data/default/default_0.nsc").unwrap(), CharClass::HUmar).unwrap();
-        fc.name = "\u{0009}Eguaco".to_string();
-        fc.chara.name = "\u{0009}Eguaco".to_string();
+        fc.name = "\tEguaco".to_string();
+        fc.chara.name = "\tEguaco".to_string();
         fc.guildcard = 1000000;
         fc.key_config.guildcard = 1000000;
         fc.chara.level = 30;
@@ -196,24 +196,25 @@ fn client_thread(mut w: EncryptWriter<TcpStream, BbCipher>, mut r: DecryptReader
                 lm.hdr.tag = 0x00010000;
                 lm.hdr.client_id = 0;
                 lm.hdr.name = fc.name.clone();
-                lm.data.name = fc.chara.name.clone();
-                lm.data.name_color = 0xFFFFFFFF;
-                lm.data.section = 1;
-                lm.data.class = 1;
-                lm.data.level = 30;
-                lm.data.version = 3;
-                lm.data.v1flags = 25;
-                lm.data.hp = 400;
-                lm.data.model = 0;
-                lm.data.skin = 1;
-                lm.data.face = 1;
-                lm.data.head = 1;
-                lm.data.hair = 1;
-                lm.data.prop_x = 1.0;
-                lm.data.prop_y = 1.0;
-                //l.members.push(lm);
-                Message::LobbyJoin(0, l).serialize(&mut w).unwrap();
-                Message::LobbyArrowList(0, LobbyArrowList(Vec::new())).serialize(&mut w).unwrap();
+                lm.data = fc.chara.clone();
+                // lm.data.name = fc.chara.name.clone();
+                // lm.data.name_color = 0xFFFFFFFF;
+                // lm.data.section = 1;
+                // lm.data.class = 1;
+                // lm.data.level = 30;
+                // lm.data.version = 3;
+                // lm.data.v1flags = 25;
+                // lm.data.hp = 400;
+                // lm.data.model = 0;
+                // lm.data.skin = 1;
+                // lm.data.face = 1;
+                // lm.data.head = 1;
+                // lm.data.hair = 1;
+                // lm.data.prop_x = 1.0;
+                // lm.data.prop_y = 1.0;
+                l.members.push(lm);
+                //Message::LobbyArrowList(0, LobbyArrowList(Vec::new())).serialize(&mut w).unwrap();
+                Message::LobbyJoin(1, l).serialize(&mut w).unwrap();
             }
             a => info!("block client recv msg {:?}", a)
         }}

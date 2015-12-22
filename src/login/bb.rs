@@ -210,6 +210,7 @@ pub fn run_character(mut ctx: Context) -> () {
                                     name: "Burrito".to_string()
                                 }
                             ])).serialize(&mut w_s).unwrap();
+                            Message::BbScrollMsg(0, BbInfoReply("sup".to_string())).serialize(&mut w_s).unwrap();
                         }
                     },
                     _ => {

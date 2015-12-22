@@ -475,6 +475,24 @@ impl Serial for BbCharDat {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct BbInfoReply(pub String);
+impl Serial for BbInfoReply {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(0u64.serialize(dst));
+        try!(write_utf16(&self.0, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        try!(u64::deserialize(src));
+        let msg = try!(read_utf16(src));
+        Ok(BbInfoReply(msg))
+    }
+}
+
+pub type BbScrollMsg = BbInfoReply;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct BbSecurityData {
     // uint32_t magic;                     /* Must be 0xDEADBEEF */

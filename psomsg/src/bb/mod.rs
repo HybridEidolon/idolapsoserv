@@ -124,6 +124,7 @@ gen_message_enum! {
     0x0005 => Goodbye,
     0x0007 => BlockList,
     0x0010 => MenuSelect,
+    0x0011 => BbInfoReply,
     0x0019 => Redirect,
     0x0061 => BbCharDat,
     0x0067 => LobbyJoin,
@@ -153,5 +154,6 @@ gen_message_enum! {
     0x02EB => BbParamChunk,
     0x03EB => BbParamChunkReq,
     0x04EB => BbParamHdrReq,
-    0x00EC => BbSetFlags
+    0x00EC => BbSetFlags,
+    0x00EE => BbScrollMsg
 }

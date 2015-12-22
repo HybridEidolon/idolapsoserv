@@ -24,6 +24,7 @@ impl Serial for LobbyJoin {
         try!(self.lobby_num.serialize(dst));
         try!(self.block_num.serialize(dst));
         try!(self.event.serialize(dst));
+        try!(0u32.serialize(dst)); //padding
         for i in self.members.iter() {
             try!(i.serialize(dst));
         }
@@ -64,5 +65,25 @@ impl Default for LobbyMember {
             inventory: Default::default(),
             data: Default::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::io::Cursor;
+    use ::Serial;
+    #[test]
+    fn test_lobby_join_size() {
+        let l = LobbyJoin::default();
+        let mut c = Cursor::new(Vec::new());
+        l.serialize(&mut c).unwrap();
+        assert_eq!(c.position(), 0x14 - 8);
+
+        let mut l = LobbyJoin::default();
+        l.members.push(LobbyMember::default());
+        let mut c = Cursor::new(Vec::new());
+        l.serialize(&mut c).unwrap();
+        assert_eq!(c.position(), 1324);
     }
 }
