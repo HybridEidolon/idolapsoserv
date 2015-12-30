@@ -25,7 +25,7 @@ enum ShipMsg {
 /// Messages bound for the Client.
 enum ClientMsg {
     LargeMsg(String),
-    JoinBlockLobby(u8, u8),
+    //JoinBlockLobby(u8, u8),
     AbruptDisconnect
 }
 
@@ -131,7 +131,7 @@ fn client_acceptor(bind: &str, tx: Sender<ShipMsg>) {
     tx.send(ShipMsg::AcceptorClosing).unwrap();
 }
 
-fn client_thread(mut w: EncryptWriter<TcpStream, BbCipher>, mut r: DecryptReader<TcpStream, BbCipher>, rx: Receiver<ClientMsg>, tx: Sender<ShipMsg>) {
+fn client_thread(mut w: EncryptWriter<TcpStream, BbCipher>, mut r: DecryptReader<TcpStream, BbCipher>, _rx: Receiver<ClientMsg>, tx: Sender<ShipMsg>) {
     use psomsg::bb::*;
     use psomsg::Serial;
     use std::fs::File;
@@ -255,7 +255,7 @@ fn handle_newclient(stream: &mut TcpStream, key_table: Arc<Vec<u32>>, db_pool: A
             {
                 let db = match conn.lock() {
                     Ok(d) => d,
-                    Err(e) => return Err(Error::new(ErrorKind::DbError, "Poisoned connection lock!"))
+                    Err(_e) => return Err(Error::new(ErrorKind::DbError, "Poisoned connection lock!"))
                 };
 
                 account = match db.get_account_by_username(&username) {
@@ -266,7 +266,7 @@ fn handle_newclient(stream: &mut TcpStream, key_table: Arc<Vec<u32>>, db_pool: A
             }
 
             if !account.cmp_password(&password, "") {
-                if let Err(e) = Message::BbSecurity(0, BbSecurity {
+                if let Err(_e) = Message::BbSecurity(0, BbSecurity {
                     err_code: 4,
                     tag: 0,
                     guildcard: 0,
@@ -280,7 +280,7 @@ fn handle_newclient(stream: &mut TcpStream, key_table: Arc<Vec<u32>>, db_pool: A
             }
 
             if account.banned {
-                if let Err(e) = Message::BbSecurity(0, BbSecurity {
+                if let Err(_e) = Message::BbSecurity(0, BbSecurity {
                     err_code: 7,
                     tag: 0,
                     guildcard: 0,
