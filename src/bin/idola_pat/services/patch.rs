@@ -15,9 +15,11 @@ use std::net::SocketAddr;
 use mio::tcp::TcpListener;
 use mio::Sender;
 
+use psomsg::patch::*;
+
 pub struct PatchService {
     receiver: Receiver<ServiceMsg>,
-    _sender: Sender<LoopMsg>
+    sender: Sender<LoopMsg>
 }
 
 impl PatchService {
@@ -29,7 +31,7 @@ impl PatchService {
         thread::spawn(move|| {
             let p = PatchService {
                 receiver: rx,
-                _sender: sender
+                sender: sender
             };
             p.run()
         });
@@ -50,13 +52,29 @@ impl PatchService {
             match msg {
                 ServiceMsg::ClientConnected(id) => {
                     println!("Client {} connected to patch service", id);
-                    // TODO welcome it
+                    let w = Box::new(Message::Welcome(Some(Welcome { server_vector: 0, client_vector: 0 })));
+                    self.sender.send(LoopMsg::Client(id, w)).unwrap();
                 },
                 ServiceMsg::ClientDisconnected(id) => {
                     println!("Client {} disconnected from patch service.", id)
                 },
                 ServiceMsg::ClientSaid(id, m) => {
-                    println!("Client {} said a thing: {:?}", id, m)
+                    match m.as_ref() {
+                        &Message::Welcome(None) => {
+                            self.sender.send(LoopMsg::Client(id, Box::new(
+                                Message::Login(None)
+                            ))).unwrap();
+                        },
+                        &Message::Login(Some(..)) => {
+                            self.sender.send(LoopMsg::Client(id, Box::new(
+                                Message::Motd(Some(Motd { message: "Hi there\nfriend".to_string() }))
+                            ))).unwrap();
+                            // TODO send redirect;
+                        },
+                        _ => {
+                            warn!("weird message sent by client");
+                        }
+                    }
                 }
             }
         }

@@ -33,15 +33,13 @@ impl Service {
         Service {
             listener: listener,
             token: Token(0),
-            clients: unsafe { mem::uninitialized() },
+            clients: Slab::new(0),
             sender: sender
         }
     }
 
     pub fn register<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         self.clients = Slab::new_starting_at(Token(self.token.0 * 1000000), 2000);
-
-        println!("registering service");
 
         event_loop.register(
             &self.listener,
@@ -84,11 +82,9 @@ impl Service {
                 // inserted successfully
                 match self.get_client_mut(token).map(|c| c.register(event_loop)) {
                     Some(Ok(_)) => {
-                        println!("si seniorita");
                         self.sender.send(ServiceMsg::ClientConnected(token.0)).unwrap();
                     },
                     Some(Err(_e)) => {
-                        println!("oh no friend :(");
                         self.clients.remove(token);
                     },
                     None => unreachable!() // maybe?

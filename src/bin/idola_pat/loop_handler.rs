@@ -21,7 +21,6 @@ pub struct LoopHandler {
 impl LoopHandler {
     pub fn new<H: Handler>(services: Vec<Service>, event_loop: &mut EventLoop<H>) -> LoopHandler {
         let mut svcs = Slab::new_starting_at(Token(1), 16);
-        println!("{}", services.len());
         for mut s in services {
             svcs.insert_with(|token| {
                 s.token = token;
@@ -46,10 +45,11 @@ impl Handler for LoopHandler {
     type Message = LoopMsg;
 
     fn ready(&mut self, event_loop: &mut EventLoop<Self>, token: Token, events: EventSet) {
-        match self.services.iter_mut().find(|s| s.token == token) {
+        match self.services.get_mut(token) {
             Some(s) => {
                 // Accept
                 s.accept(event_loop);
+                return
             },
             None => {
                 // This token is not a service, but a connected client.
@@ -63,7 +63,7 @@ impl Handler for LoopHandler {
             .find(|s| s.has_client(token))
             .map(|s| s.ready(event_loop, token, events))
             .unwrap_or_else(|| {
-                println!("token {:?} is not a valid client or service", token);
+                error!("token {:?} is not a valid client or service", token);
             });
     }
 
@@ -73,7 +73,7 @@ impl Handler for LoopHandler {
                 self.services.get_mut(t)
                     .map(|s| s.notify_svc(event_loop, m))
                     .unwrap_or_else(|| {
-                        println!("we don't have a service on token {:?}...", t);
+                        error!("we don't have a service on token {:?}...", t);
                     });
             },
             LoopMsg::Client(t, m) => {
@@ -83,7 +83,7 @@ impl Handler for LoopHandler {
                         s.notify_client(event_loop, Token(t), m);
                     })
                     .unwrap_or_else(|| {
-                        println!("no client?")
+                        error!("no client?")
                     });
             }
         }
@@ -94,7 +94,7 @@ impl Handler for LoopHandler {
     // }
 
     fn interrupted(&mut self, event_loop: &mut EventLoop<Self>) {
-        println!("Interrupted");
+        info!("Interrupted");
         event_loop.shutdown();
     }
 

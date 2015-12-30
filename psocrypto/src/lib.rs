@@ -21,10 +21,18 @@ pub use self::pc::PcCipher;
 
 pub trait Encryptor {
     fn encrypt(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String>;
+    fn encrypt_in_place(&mut self, buf: &mut [u8]) -> Result<(), String> {
+        let temp = buf.to_vec();
+        self.encrypt(&temp, buf)
+    }
 }
 
 pub trait Decryptor {
     fn decrypt(&mut self, input: &[u8], output: &mut [u8]) -> Result<(), String>;
+    fn decrypt_in_place(&mut self, buf: &mut [u8]) -> Result<(), String> {
+        let temp = buf.to_vec();
+        self.decrypt(&temp, buf)
+    }
 }
 
 pub struct DecryptReader<R: Read, D: Decryptor> {

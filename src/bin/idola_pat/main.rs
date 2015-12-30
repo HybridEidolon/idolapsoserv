@@ -7,6 +7,7 @@ extern crate rustc_serialize;
 extern crate docopt;
 extern crate toml;
 extern crate mio;
+extern crate byteorder;
 
 extern crate psomsg;
 extern crate psocrypto;
@@ -25,6 +26,8 @@ use mio::EventLoop;
 use docopt::Docopt;
 
 fn main() {
+    env_logger::init().unwrap();
+
     let _: Args = Docopt::new(USAGE_STRING)
         .and_then(|o| o.decode())
         .unwrap_or_else(|e| e.exit());
@@ -37,7 +40,6 @@ fn main() {
 
     let mut services = Vec::new();
     services.push(PatchService::spawn(&"127.0.0.1:11000".parse().unwrap(), event_loop.channel()));
-    println!("{}", services.len());
 
     let mut loop_handler = LoopHandler::new(services, &mut event_loop);
 
