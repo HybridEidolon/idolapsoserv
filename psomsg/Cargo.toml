@@ -7,5 +7,9 @@ authors = ["Eidolon"]
 byteorder = "~0.4"
 encoding = "~0.2"
 log = "~0.3"
-psocrypto = { path = "../psocrypto" }
+psoserial = { path = "../psoserial" }
+staticvec = { path = "../staticvec" }
 typenum = "~1.1"
+psomsg_common = { path = "../psomsg_common" }
+psomsg_patch = { path = "../psomsg_patch" }
+psomsg_bb = { path = "../psomsg_bb" }

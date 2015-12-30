@@ -1,0 +1,8 @@
+[package]
+name = "staticvec"
+version = "0.1.0"
+authors = ["Eidolon"]
+
+[dependencies]
+psoserial = { path = "../psoserial" }
+typenum = "1.1"

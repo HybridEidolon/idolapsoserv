@@ -7,17 +7,18 @@ authors = ["Eidolon"]
 psocrypto = { path = "psocrypto" }
 psomsg = { path = "psomsg" }
 psodata = { path = "psodata" }
-rand = "~0.3"
-byteorder = "~0.4"
-rustc-serialize = "~0.3"
-encoding = "~0.2"
-log = "~0.3"
-env_logger = "~0.3"
-typenum = "~1.1"
-toml = "~0.1"
-docopt = "~0.6"
-rusqlite = "~0.5"
-rust-crypto = "~0.2"
+psodb_common = { path = "psodb_common" }
+psodb_sqlite = { path = "psodb_sqlite" }
+staticvec = { path = "staticvec" }
+rand = "0.3"
+byteorder = "0.4"
+rustc-serialize = "0.3"
+encoding = "0.2"
+log = "0.3"
+env_logger = "0.3"
+typenum = "1.1"
+toml = "0.1"
+docopt = "0.6"
 crc = "1.2"
 mio = "0.5"
 
@@ -36,6 +37,6 @@ mio = "0.5"
 # [[bin]]
 # name = "idola_monolith"
 
-[[bin]]
-name = "idola_pat"
-path = "src/bin/idola_pat/main.rs"
+# [[bin]]
+# name = "idola_pat"
+# path = "src/bin/idola_pat/main.rs"

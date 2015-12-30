@@ -1,0 +1,9 @@
+[package]
+name = "psodb_common"
+version = "0.1.0"
+authors = ["Eidolon"]
+
+[dependencies]
+log = "0.3"
+rusqlite = "0.5"
+rust-crypto = "0.2"

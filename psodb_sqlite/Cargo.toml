@@ -1,0 +1,9 @@
+[package]
+name = "psodb_sqlite"
+version = "0.1.0"
+authors = ["Eidolon"]
+
+[dependencies]
+psodb_common = { path = "../psodb_common" }
+rusqlite = "0.5"
+log = "0.3"

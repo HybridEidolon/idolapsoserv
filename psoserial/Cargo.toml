@@ -1,0 +1,7 @@
+[package]
+name = "psoserial"
+version = "0.1.0"
+authors = ["Eidolon"]
+
+[dependencies]
+byteorder = "0.4"

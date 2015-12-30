@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 
-use ::db::Pool;
+use psodb_common::Pool;
 
 use psocrypto::{EncryptWriter, DecryptReader};
 use psocrypto::bb::BbCipher;
@@ -227,7 +227,7 @@ fn handle_newclient(stream: &mut TcpStream, key_table: Arc<Vec<u32>>, db_pool: A
     use psomsg::bb::*;
     use psomsg::Serial;
     use rand::random;
-    use ::db::Account;
+    use psodb_common::Account;
 
     // Generate our crypto.
     let s_key = vec![random::<u8>(); 48];

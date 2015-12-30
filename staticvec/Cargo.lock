@@ -1,0 +1,25 @@
+[root]
+name = "staticvec"
+version = "0.1.0"
+dependencies = [
+ "psoserial 0.1.0",
+ "typenum 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "byteorder"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "psoserial"
+version = "0.1.0"
+dependencies = [
+ "byteorder 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "typenum"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+

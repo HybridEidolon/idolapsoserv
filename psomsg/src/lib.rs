@@ -4,15 +4,16 @@
 extern crate byteorder;
 extern crate encoding;
 extern crate typenum;
-extern crate psocrypto;
-
+#[macro_use] extern crate psoserial;
 #[macro_use] extern crate log;
+extern crate staticvec;
 
-pub mod staticvec;
+extern crate psomsg_common;
+extern crate psomsg_patch;
+extern crate psomsg_bb;
 
-#[macro_use] pub mod serial;
+pub use psoserial::Serial;
 
-pub use ::serial::*;
 pub mod util;
 pub mod common;
 

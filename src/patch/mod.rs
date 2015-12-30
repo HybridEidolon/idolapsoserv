@@ -82,7 +82,7 @@ impl ClientContext {
 
     pub fn run_data(&mut self) -> () {
         use psomsg::patch::*;
-        use psomsg::staticvec::StaticVec;
+        use staticvec::StaticVec;
         let peer = self.stream.peer_addr().unwrap();
 
         info!("connected {}", peer);

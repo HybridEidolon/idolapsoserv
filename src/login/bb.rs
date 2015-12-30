@@ -3,7 +3,7 @@
 //! central service, the state machine functions will consume and drop the connection context
 //! on its own.
 
-use ::db::pool::Pool;
+use psodb_common::pool::Pool;
 
 use std::net::{TcpStream, Ipv4Addr};
 

@@ -1,13 +1,13 @@
 //! BattleParamEntry structure. A BattleParamEntry file has room for 0x180 entries.
 
-use super::Parse;
+use psoserial::Serial;
 
 use std::io::{Read, Write};
 use std::io;
 
 use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct BattleParam {
     pub atp: u16,
     pub int: u16,
@@ -21,8 +21,8 @@ pub struct BattleParam {
     pub difficulty: u32
 }
 
-impl Parse for BattleParam {
-    fn read(src: &mut Read) -> io::Result<BattleParam> {
+impl Serial for BattleParam {
+    fn deserialize(src: &mut Read) -> io::Result<BattleParam> {
         let atp = try!(src.read_u16::<LE>());
         let int = try!(src.read_u16::<LE>());
         let evp = try!(src.read_u16::<LE>());
@@ -47,7 +47,7 @@ impl Parse for BattleParam {
         })
     }
 
-    fn write(&self, dst: &mut Write) -> io::Result<()> {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
         try!(dst.write_u16::<LE>(self.atp));
         try!(dst.write_u16::<LE>(self.int));
         try!(dst.write_u16::<LE>(self.evp));

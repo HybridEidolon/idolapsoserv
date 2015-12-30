@@ -1,16 +1,18 @@
 extern crate psodata;
+extern crate psoserial;
 
-use std::io::{Read};
+use std::io::Read;
 use std::fs::File;
 
-use psodata::{Parse, BattleParam};
+use psodata::BattleParam;
+use psoserial::Serial;
 
 fn main() {
     let mut bpefile = File::open("C:/Users/Eidolon/Code/rust/idolapsoserv/data/param/BattleParamEntry.dat").unwrap();
     let mut entries = Vec::new();
 
     for _ in 0..0x180 {
-        entries.push(BattleParam::read(&mut bpefile).unwrap());
+        entries.push(BattleParam::deserialize(&mut bpefile).unwrap());
     }
 
     println!("BattleParamEntry.dat");

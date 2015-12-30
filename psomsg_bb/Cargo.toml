@@ -1,0 +1,12 @@
+[package]
+name = "psomsg_bb"
+version = "0.1.0"
+authors = ["Eidolon"]
+
+[dependencies]
+psoserial = { path = "../psoserial" }
+psomsg_common = { path = "../psomsg_common" }
+staticvec = { path = "../staticvec" }
+typenum = "1.1"
+byteorder = "0.4"
+log = "0.3"
