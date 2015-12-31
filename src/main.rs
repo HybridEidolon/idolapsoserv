@@ -2,6 +2,8 @@
 extern crate psocrypto;
 extern crate psomsg;
 extern crate psodata;
+#[macro_use] extern crate psoserial;
+extern crate psomsg_common;
 extern crate psodb_common;
 extern crate psodb_sqlite;
 
@@ -24,6 +26,7 @@ pub mod game;
 pub mod login;
 pub mod bb;
 pub mod ship;
+pub mod shipgate;
 pub mod util;
 pub mod args;
 pub mod loop_handler;
@@ -41,8 +44,11 @@ use ::loop_handler::LoopHandler;
 use ::patch::PatchService;
 use ::data::DataService;
 use ::login::bb::BbLoginService;
-
+use ::shipgate::client::ShipGateClient;
+use ::shipgate::ShipGateService;
+use ::services::Service;
 use ::config::Config;
+use ::config::ServiceConf;
 
 use std::fs::File;
 use std::sync::Arc;
@@ -62,7 +68,7 @@ fn main() {
         return
     }
 
-    let config;
+    let config: Config;
     {
         use std::io::Read;
         let mut config_file = File::open(&args.flag_config).expect(&format!("Failed to open file {}", args.flag_config));
@@ -78,15 +84,24 @@ fn main() {
         bb_keytable = Arc::new(read_key_table(&mut keytable_file).expect("Failed to parse BB keytable"));
     }
 
-    // 1. Create EventLoop.
-    // 2. Spin up service threads to get handles.
-    // 3. Create LoopHandler and register services.
-    // 4. Run event loop.
     let mut event_loop = EventLoop::new().expect("Could not create event loop");
+
+    // If we have a shipgate service in our configuration, we should spin it up first.
+    let mut sg: Option<Service> = None;
+    if let Some(c) = config.services.iter().find(|c| if let _e @ &&ServiceConf::ShipGate {..} = c { true } else { false } ) {
+        match c {
+            &ServiceConf::ShipGate { ref bind, ref password, .. } => {
+                sg = Some(ShipGateService::spawn(bind, event_loop.channel(), password));
+            },
+            _ => unreachable!()
+        }
+    }
+
+    // Spin up the shipgate client.
+    let sg_sender = ShipGateClient::spawn(config.shipgate_addr.clone(), &config.shipgate_password);
 
     let mut services = Vec::new();
     for s in config.services.iter() {
-        use ::config::ServiceConf;
         match s {
             &ServiceConf::Patch { ref bind, ref v4_servers, ref motd, random_balance } => {
                 println!("Patch service at {:?}", bind);
@@ -100,9 +115,20 @@ fn main() {
                 println!("Login service at {:?}", bind);
                 match version {
                     Version::BlueBurst => {
-                        services.push(BbLoginService::spawn(bind, event_loop.channel(), bb_keytable.clone()))
+                        services.push(BbLoginService::spawn(bind, event_loop.channel(), bb_keytable.clone(), sg_sender.clone()))
                     },
                     _ => unimplemented!()
+                }
+            },
+            &ServiceConf::ShipGate { .. } => {
+                match sg {
+                    Some(ss) => {
+                        services.push(ss);
+                        sg = None;
+                    },
+                    None => {
+                        panic!("The shipgate should have already been spawned, or maybe you declared two shipgate services?");
+                    }
                 }
             }
         }

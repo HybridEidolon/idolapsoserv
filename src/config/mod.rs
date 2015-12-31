@@ -8,6 +8,8 @@ use ::game::Version;
 pub struct Config {
     pub data_path: String,
     pub bb_keytable_path: String,
+    pub shipgate_addr: SocketAddr,
+    pub shipgate_password: String,
     pub services: Vec<ServiceConf>
 }
 
@@ -28,8 +30,20 @@ pub enum ServiceConf {
         // The login service just redirects to one of the ship servers.
         // In this implementation, the ship servers act as a character server
         // for BB.
+    },
+    ShipGate {
+        bind: SocketAddr,
+        password: String,
+        db: DbConf
     }
     // ...
+}
+
+#[derive(Debug, Clone)]
+pub enum DbConf {
+    Sqlite {
+        file: String
+    }
 }
 
 impl Config {
@@ -38,13 +52,16 @@ impl Config {
         if let Some(value) = parser.parse() {
             Config::from_toml_value(&value)
         } else {
-            Err(format!("{:?}", parser.errors))
+            let errors: Vec<String> = parser.errors.into_iter().map(|e| format!("{}", e)).collect();
+            Err(format!("{:?}", errors))
         }
     }
 
     pub fn from_toml_value(t: &Table) -> Result<Config, String> {
         let data_path;
         let bb_keytable_path;
+        let shipgate_addr;
+        let shipgate_password;
         if let Some(i) = t.get("idola") {
             data_path = i.lookup("data_path")
                 .and_then(|v| v.as_str())
@@ -54,6 +71,19 @@ impl Config {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
                 .unwrap_or(format!("{}/crypto/bb_table.bin", data_path));
+            shipgate_addr = match i.lookup("shipgate_addr")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.to_socket_addrs().ok())
+                .and_then(|mut s| s.next()) {
+                    Some(v) => v,
+                    None => return Err("Shipgate address not specified or malformed".to_string())
+                };
+            shipgate_password = match i.lookup("shipgate_password")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()) {
+                    Some(v) => v,
+                    None => return Err("Shipgate password is not specified.".to_string())
+                };
         } else {
             return Err("No idola section".to_string())
         }
@@ -69,7 +99,9 @@ impl Config {
         Ok(Config {
             data_path: data_path,
             bb_keytable_path: bb_keytable_path,
-            services: services
+            services: services,
+            shipgate_addr: shipgate_addr,
+            shipgate_password: shipgate_password
         })
     }
 }
@@ -122,6 +154,31 @@ impl ServiceConf {
                             bind: bind,
                             version: version
                         })
+                    },
+                    "shipgate" => {
+                        let password;
+                        let db;
+                        if let Some(p) = t.get("password")
+                            .and_then(|v| v.as_str())
+                            .map(|v| v.to_string()) {
+                            password = p;
+                        } else {
+                            return Err("No password for shipgate specified".to_string())
+                        }
+                        if let Some(d) = t.get("db")
+                            .and_then(|v| v.as_table()) {
+                            match DbConf::from_toml_table(d) {
+                                Ok(dbv) => db = dbv,
+                                Err(e) => return Err(e)
+                            }
+                        } else {
+                            return Err("No db configured for shipgate".to_string())
+                        }
+                        Ok(ServiceConf::ShipGate {
+                            bind: bind,
+                            password: password,
+                            db: db
+                        })
                     }
                     _ => return Err("invalid service type specified".to_string())
                 }
@@ -130,6 +187,28 @@ impl ServiceConf {
             }
         } else {
             Err("No bind address specified for service".to_string())
+        }
+    }
+}
+
+impl DbConf {
+    pub fn from_toml_table(t: &Table) -> Result<DbConf, String> {
+        match t.get("type").and_then(|v| v.as_str()) {
+            Some("sqlite") => {
+                let file;
+                if let Some(f) = t.get("file")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()) {
+                    file = f;
+                } else {
+                    return Err("sqlite DB type file path missing.".to_string())
+                }
+                Ok(DbConf::Sqlite {
+                    file: file
+                })
+            },
+            Some(t) => { Err(format!("unsupported db type {}", t)) },
+            None => { Err("shipgate db type not specified".to_string()) }
         }
     }
 }

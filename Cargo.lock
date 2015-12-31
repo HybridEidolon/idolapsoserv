@@ -14,6 +14,8 @@ dependencies = [
  "psodb_common 0.1.0",
  "psodb_sqlite 0.1.0",
  "psomsg 0.1.0",
+ "psomsg_common 0.1.0",
+ "psoserial 0.1.0",
  "rand 0.3.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "staticvec 0.1.0",

@@ -4,9 +4,11 @@
 
 pub mod patch;
 pub mod bb;
+pub mod shipgate;
 
 pub use self::patch::PatchClient;
 pub use self::bb::BbClient;
+pub use self::shipgate::ShipGateClient;
 
 use mio::{EventLoop, Handler};
 use std::io;
@@ -35,7 +37,8 @@ pub trait ClientHandler {
 
 pub enum Client {
     Patch(PatchClient),
-    Bb(BbClient)
+    Bb(BbClient),
+    ShipGate(ShipGateClient)
 }
 
 impl ClientHandler for Client {
@@ -43,28 +46,32 @@ impl ClientHandler for Client {
     fn register<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         match self {
             &mut Client::Patch(ref mut p) => p.register(event_loop),
-            &mut Client::Bb(ref mut b) => b.register(event_loop)
+            &mut Client::Bb(ref mut b) => b.register(event_loop),
+            &mut Client::ShipGate(ref mut s) => s.register(event_loop)
         }
     }
 
     fn reregister<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         match self {
             &mut Client::Patch(ref mut p) => p.reregister(event_loop),
-            &mut Client::Bb(ref mut b) => b.reregister(event_loop)
+            &mut Client::Bb(ref mut b) => b.reregister(event_loop),
+            &mut Client::ShipGate(ref mut s) => s.reregister(event_loop)
         }
     }
 
     fn readable<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         match self {
             &mut Client::Patch(ref mut p) => p.readable(event_loop),
-            &mut Client::Bb(ref mut b) => b.readable(event_loop)
+            &mut Client::Bb(ref mut b) => b.readable(event_loop),
+            &mut Client::ShipGate(ref mut s) => s.readable(event_loop)
         }
     }
 
     fn writable<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         match self {
             &mut Client::Patch(ref mut p) => p.writable(event_loop),
-            &mut Client::Bb(ref mut b) => b.writable(event_loop)
+            &mut Client::Bb(ref mut b) => b.writable(event_loop),
+            &mut Client::ShipGate(ref mut s) => s.writable(event_loop)
         }
     }
 
@@ -77,6 +84,10 @@ impl ClientHandler for Client {
             &mut Client::Bb(ref mut b) => match msg {
                 NetMsg::Bb(m) => b.send_msg(event_loop, m),
                 _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid message type sent to BB client"))
+            },
+            &mut Client::ShipGate(ref mut s) => match msg {
+                NetMsg::ShipGate(m) => s.send_msg(event_loop, m),
+                _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid message type sent to ShipGate client"))
             }
         }
     }
@@ -84,7 +95,8 @@ impl ClientHandler for Client {
     fn drop_client<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         match self {
             &mut Client::Patch(ref mut p) => p.drop_client(event_loop),
-            &mut Client::Bb(ref mut b) => b.drop_client(event_loop)
+            &mut Client::Bb(ref mut b) => b.drop_client(event_loop),
+            &mut Client::ShipGate(ref mut s) => s.drop_client(event_loop)
         }
     }
 }

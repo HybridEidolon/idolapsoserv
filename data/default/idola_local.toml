@@ -3,6 +3,12 @@
 data_path = "data"
 # Optional: path to Blue Burst crypto key table
 bb_keytable_path = "data/crypto/bb_table.bin"
+# The address to the shipgate service.
+shipgate_addr = "127.0.0.1:6813"
+# The internal password to the shipgate. DO NOT PUBLISH THIS! If anyone knows
+# the password, they can register a ship on your shipgate and access all
+# database information and generally break stuff.
+shipgate_password = "CHANGE_ME_IF_PUBLIC"
 
 # The PSOBB Tethealla localhost client is set to connect to 127.0.0.1:11000,
 # NOT localhost:11000. Therefore, the service binds here MUST be on the
@@ -11,6 +17,7 @@ bb_keytable_path = "data/crypto/bb_table.bin"
 
 # To define additional services, add a [[service]] and set its properties.
 
+## Patch Hub ##
 [[service]]
 # The address to bind to. For the external internet, you would want 0.0.0.0.
 # An IPv6 example is below, but IPv6 support is not complete yet.
@@ -33,16 +40,9 @@ demonstrating the color codes you can use.
 There is no word wrap.
 
 Color codes:
-\tC0Black
-\tC1Blue
-\tC2Green
-\tC3Cyan
-\tC4Red
-\tC5Magenta
-\tC6Yellow
-\tC7White
-\tC8Light Red
-\tC9Lavender
+\tC0Black \tC1Blue \tC2Green \tC3Cyan
+\tC4Red \tC5Magenta \tC6Yellow \tC7White
+\tC8Light Red \tC9Lavender
 
 \tC7
 Please see the data/default/idola_local.toml config file
@@ -55,12 +55,25 @@ for more information.
 #bind = "[::1]:11000"
 #type = "patch"
 
+## Patch Data ##
 [[service]]
 bind = "127.0.0.1:11001"
 type = "data"
 
+## Login (Blue Burst) ##
 [[service]]
 bind = "127.0.0.1:12000"
 type = "login"
 # The only currently supported version is BlueBurst.
 version = "BlueBurst"
+
+## Shipgate ##
+# The shipgate is a special service. Rather than clients connecting to it, the
+# shipgate is unique to a PSO network and manages inter-ship comms and database
+# information. You only need one shipgate for the entire service network. Do
+# not expose the password to anyone but other instances if IDOLA.
+[[service]]
+bind = "127.0.0.1:6813"
+type = "shipgate"
+password = "CHANGE_ME_IF_PUBLIC"
+db = { type = "sqlite", file = "local.db" }

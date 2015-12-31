@@ -10,17 +10,20 @@ use std::sync::mpsc::Sender as MpscSender;
 pub mod client;
 pub mod message;
 
-use self::client::{Client, PatchClient, BbClient, ClientHandler};
+use self::client::{Client, PatchClient, BbClient, ShipGateClient, ClientHandler};
 
 use self::message::NetMsg;
 
 use std::sync::Arc;
 
+use ::shipgate::msg::Message as ShipGateMsg;
+
 #[derive(Clone)]
 pub enum ServiceMsg {
     ClientConnected(usize),
     ClientSaid(usize, NetMsg),
-    ClientDisconnected(usize)
+    ClientDisconnected(usize),
+    ShipGateMsg(ShipGateMsg)
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -28,7 +31,8 @@ pub enum ServiceType {
     /// Uses the Patch namespace in `psomsg::patch`
     Patch,
     /// Uses the Blue Burst namespace in `psomsg::bb`. 0 is the crypto key table
-    Bb(Arc<Vec<u32>>)
+    Bb(Arc<Vec<u32>>),
+    ShipGate
 }
 
 /// A communication handle for a service.
@@ -91,6 +95,7 @@ impl Service {
             match st {
                 ServiceType::Patch => Client::Patch(PatchClient::new(sock, token, sender_clone)),
                 ServiceType::Bb(ref kt) => Client::Bb(BbClient::new(sock, token, sender_clone, kt.clone())),
+                ServiceType::ShipGate => Client::ShipGate(ShipGateClient::new(sock, token, sender_clone))
                 //_ => unimplemented!()
             }
         }) {

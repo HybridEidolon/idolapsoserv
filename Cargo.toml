@@ -10,6 +10,8 @@ psodata = { path = "psodata" }
 psodb_common = { path = "psodb_common" }
 psodb_sqlite = { path = "psodb_sqlite" }
 staticvec = { path = "staticvec" }
+psoserial = { path = "psoserial" }
+psomsg_common = { path = "psomsg_common" }
 rand = "0.3"
 byteorder = "0.4"
 rustc-serialize = "0.3"
