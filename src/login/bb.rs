@@ -210,7 +210,7 @@ pub fn run_character(mut ctx: Context) -> () {
                                     name: "Burrito".to_string()
                                 }
                             ])).serialize(&mut w_s).unwrap();
-                            Message::BbScrollMsg(0, BbInfoReply("sup".to_string())).serialize(&mut w_s).unwrap();
+                            Message::BbScrollMsg(0, BbScrollMsg("sup".to_string())).serialize(&mut w_s).unwrap();
                         }
                     },
                     _ => {
@@ -335,7 +335,7 @@ pub fn run_character(mut ctx: Context) -> () {
                     0 => {
                         // ship select
                         ctx.menu_id = 1;
-                        Message::BlockList(1, ShipList(vec![
+                        Message::BlockList(1, BlockList(vec![
                             ShipListItem {
                                 menu_id: 1,
                                 item_id: 0,

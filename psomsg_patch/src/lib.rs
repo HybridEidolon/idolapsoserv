@@ -115,6 +115,22 @@ macro_rules! gen_message_enum_patch {
                 }
             }
         }
+
+        $(
+            impl From<$name> for Message {
+                #[inline(always)]
+                fn from(val: $name) -> Message {
+                    Message::$name(Some(val))
+                }
+            }
+
+            impl From<Option<$name>> for Message {
+                #[inline(always)]
+                fn from(val: Option<$name>) -> Message {
+                    Message::$name(val)
+                }
+            }
+        )*
     }
 }
 

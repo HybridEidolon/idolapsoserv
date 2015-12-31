@@ -17,6 +17,20 @@ pub enum LoopMsg {
     DropClient(usize)
 }
 
+// impl From<(usize, NetMsg)> for LoopMsg {
+//     #[inline(always)]
+//     fn from(val: (usize, NetMsg)) -> LoopMsg {
+//         LoopMsg::Client(val.0, val.1)
+//     }
+// }
+
+impl<I: Into<NetMsg>> From<(usize, I)> for LoopMsg {
+    #[inline(always)]
+    fn from(val: (usize, I)) -> LoopMsg {
+        LoopMsg::Client(val.0, val.1.into())
+    }
+}
+
 pub struct LoopHandler {
     services: Slab<Service>
 }

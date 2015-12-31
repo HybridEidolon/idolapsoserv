@@ -481,7 +481,21 @@ impl Serial for BbInfoReply {
     }
 }
 
-pub type BbScrollMsg = BbInfoReply;
+#[derive(Clone, Debug, Default)]
+pub struct BbScrollMsg(pub String);
+impl Serial for BbScrollMsg {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(0u64.serialize(dst));
+        try!(write_utf16(&self.0, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        try!(u64::deserialize(src));
+        let msg = try!(read_utf16(src));
+        Ok(BbScrollMsg(msg))
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct BbSecurityData {

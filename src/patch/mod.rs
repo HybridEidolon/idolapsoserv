@@ -70,18 +70,11 @@ impl PatchService {
                 ServiceMsg::ClientSaid(id, NetMsg::Patch(m)) => {
                     match m {
                         Message::Welcome(None) => {
-                            self.sender.send(LoopMsg::Client(id,
-                                Message::Login(None).into()
-                            )).unwrap();
+                            self.sender.send((id, Message::Login(None)).into()).unwrap();
                         },
                         Message::Login(Some(..)) => {
-                            self.sender.send(LoopMsg::Client(id,
-                                Message::Motd(Some(Motd { message: self.motd.clone() })).into()
-                            )).unwrap();
-
-                            self.sender.send(LoopMsg::Client(id,
-                                Message::Redirect(Some(Redirect(self.v4_servers[self.next]))).into()
-                            )).unwrap();
+                            self.sender.send((id, Message::Motd(Some(Motd { message: self.motd.clone() }))).into()).unwrap();
+                            self.sender.send((id, Message::Redirect(Some(Redirect(self.v4_servers[self.next])))).into()).unwrap();
                             self.sender.send(LoopMsg::DropClient(id)).unwrap();
 
                             if self.random_data {

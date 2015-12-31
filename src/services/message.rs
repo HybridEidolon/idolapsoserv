@@ -10,14 +10,14 @@ pub enum NetMsg {
     Patch(PatchMsg)
 }
 
-impl From<BbMsg> for NetMsg {
-    fn from(val: BbMsg) -> NetMsg {
-        NetMsg::Bb(val)
+impl Into<NetMsg> for PatchMsg {
+    fn into(self) -> NetMsg {
+        NetMsg::Patch(self)
     }
 }
 
-impl From<PatchMsg> for NetMsg {
-    fn from(val: PatchMsg) -> NetMsg {
-        NetMsg::Patch(val)
+impl Into<NetMsg> for BbMsg {
+    fn into(self) -> NetMsg {
+        NetMsg::Bb(self)
     }
 }

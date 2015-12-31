@@ -122,6 +122,29 @@ macro_rules! gen_message_enum {
                 }
             }
         }
+
+        $(
+            impl From<$name> for Message {
+                #[inline(always)]
+                fn from(val: $name) -> Message {
+                    Message::$name(0, val)
+                }
+            }
+
+            impl From<(u32, $name)> for Message {
+                #[inline(always)]
+                fn from(val: (u32, $name)) -> Message {
+                    Message::$name(val.0, val.1)
+                }
+            }
+        )*
+
+        impl From<(u16, u32, Vec<u8>)> for Message {
+            #[inline(always)]
+            fn from(val: (u16, u32, Vec<u8>)) -> Message {
+                Message::Unknown(val.0, val.1, val.2)
+            }
+        }
     }
 }
 

@@ -93,7 +93,20 @@ impl Serial for ShipList {
     }
 }
 
-pub type BlockList = ShipList;
+#[derive(Clone, Debug)]
+pub struct BlockList(pub Vec<ShipListItem>);
+impl Serial for BlockList {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        for i in self.0.iter() {
+            try!(i.serialize(dst))
+        }
+        Ok(())
+    }
+
+    fn deserialize(_: &mut Read) -> io::Result<Self> {
+        unimplemented!()
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct LobbyList {
