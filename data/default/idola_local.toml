@@ -1,0 +1,62 @@
+[idola]
+data_path = "data"
+
+# The PSOBB Tethealla localhost client is set to connect to 127.0.0.1:11000,
+# NOT localhost:11000. Therefore, the service binds here MUST be on the
+# loopback address for IPv4 specifically, or the client will not be able to
+# connect.
+
+# To define additional services, add a [[service]] and set its properties.
+
+[[service]]
+# The address to bind to. For the external internet, you would want 0.0.0.0.
+# An IPv6 example is below, but IPv6 support is not complete yet.
+bind = "127.0.0.1:11000"
+# The type of service.
+type = "patch"
+# IPv4 Redirect addresses. Hostnames are not allowed, only IPs.
+# These should be EXTERNAL IP addresses, if your server is accessible from
+# the Internet. In this example, 127.0.0.1 is fine, because we are only binding
+# on loopback anyway.
+v4_servers = [
+    "127.0.0.1:11001",
+    "127.0.0.1:11002"
+]
+# Optional: Randomize load-balancing for data servers instead of round-robin.
+random_balance = false
+# Optional: Message of the day.
+motd = """\
+Welcome to the IDOLA PSO network. This is a template MOTD
+demonstrating the color codes you can use.
+There is no word wrap.
+
+Color codes:
+\tC0Black
+\tC1Blue
+\tC2Green
+\tC3Cyan
+\tC4Red
+\tC5Magenta
+\tC6Yellow
+\tC7White
+\tC8Light Red
+\tC9Lavender
+
+\tC7
+Please see the data/default/idola_local.toml config file
+for more information.
+"""
+
+# An IPv6 localhost patch server. Not particularly useful, but included as an
+# example. For unicast (Internet) on IPv6, set [::/0]:11000.
+#[[service]]
+#bind = "[::1]:11000"
+#type = "patch"
+
+[[service]]
+bind = "127.0.0.1:11001"
+type = "data"
+
+[[service]]
+bind = "127.0.0.1:11002"
+type = "data"

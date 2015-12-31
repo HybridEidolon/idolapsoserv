@@ -7,9 +7,9 @@ Usage:
     idola --version
 
 Options:
-    -c,--config=<config>  Config path.
-    -h,--help             This message.
-    --version             Print version.
+    --config=<config>        Config path [default: idola.toml].
+    -h,--help                This message.
+    --version                Print version.
 
 The config path defaults to 'idola.toml'. If no file exists, the program
 will immediately exit.
@@ -22,12 +22,6 @@ for PSOBB to connect and play. See the docs for more details.
 
 #[derive(Debug, Clone, RustcDecodable)]
 pub struct Args {
-    pub arg_config: Option<String>,
+    pub flag_config: String,
     pub flag_version: bool
-}
-
-impl Args {
-    // pub fn config(&self) -> String {
-    //     self.arg_config.clone().unwrap_or("idola_pat.toml".to_string())
-    // }
 }
