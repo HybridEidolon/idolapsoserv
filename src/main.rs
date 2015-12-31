@@ -15,6 +15,7 @@ extern crate docopt;
 extern crate mio;
 extern crate rustc_serialize;
 extern crate staticvec;
+extern crate env_logger;
 
 pub mod patch;
 pub mod data;
@@ -39,6 +40,8 @@ use ::patch::PatchService;
 use ::data::DataService;
 
 fn main() {
+    env_logger::init().expect("env_logger failed to initialize");
+
     let args: Args = Docopt::new(USAGE_STRING)
         .and_then(|o| o.decode())
         .unwrap_or_else(|e| e.exit());
