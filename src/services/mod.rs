@@ -151,5 +151,7 @@ impl Service {
         self.clients.get_mut(token).map(|c| {
             c.drop_client(event_loop)
         });
+        self.sender.send(ServiceMsg::ClientDisconnected(token.0)).unwrap();
+        self.clients.remove(token);
     }
 }

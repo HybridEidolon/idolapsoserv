@@ -75,7 +75,6 @@ impl PatchService {
                         Message::Login(Some(..)) => {
                             self.sender.send((id, Message::Motd(Some(Motd { message: self.motd.clone() }))).into()).unwrap();
                             self.sender.send((id, Message::Redirect(Some(Redirect(self.v4_servers[self.next])))).into()).unwrap();
-                            self.sender.send(LoopMsg::DropClient(id)).unwrap();
 
                             if self.random_data {
                                 self.next = random();

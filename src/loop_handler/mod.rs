@@ -62,32 +62,54 @@ impl Handler for LoopHandler {
     type Message = LoopMsg;
 
     fn ready(&mut self, event_loop: &mut EventLoop<Self>, token: Token, events: EventSet) {
-        match self.services.get_mut(token) {
-            Some(s) => {
-                // Accept
-                match s.accept(event_loop) {
-                    Err(_e) => event_loop.shutdown(),
-                    Ok(_) => ()
+        debug!("Ready");
+        if events.contains(EventSet::readable()) {
+            match self.services.get_mut(token) {
+                Some(s) => {
+                    // Accept
+                    debug!("Listener accept");
+                    match s.accept(event_loop) {
+                        Err(_e) => event_loop.shutdown(),
+                        Ok(_) => ()
+                    }
+                    return
+                },
+                None => {
+                    // This token is not a service, but a connected client.
+                    // We will continue below.
                 }
-                return
-            },
-            None => {
-                // This token is not a service, but a connected client.
-                // We will continue below.
             }
         }
 
-        // The token wasn't a service, so pass this ready event on to the
-        // service it DOES belong to.
-        self.services.iter_mut()
-            .find(|s| s.has_client(token))
-            .map(|s| s.ready(event_loop, token, events))
-            .unwrap_or_else(|| {
-                error!("token {:?} is not a valid client or service", token);
-            });
+        if events.contains(EventSet::readable()) || events.contains(EventSet::writable()) {
+            // The token wasn't a service, so pass this ready event on to the
+            // client in the service it belongs to.
+            debug!("Client stream readable or writable");
+            self.services.iter_mut()
+                .find(|s| s.has_client(token))
+                .map(|s| s.ready(event_loop, token, events))
+                .unwrap_or_else(|| {
+                    error!("token {:?} is not a valid client or service", token);
+                });
+        }
+
+        if events.contains(EventSet::hup()) {
+            debug!("Token {} hup", token.0);
+            match self.services.iter_mut().find(|s| s.has_client(token)) {
+                Some(s) => s.drop_client(event_loop, token),
+                None => {
+                    // this is a service hupping, shutdown
+                    warn!("A service listener got hup, shutting down loop.");
+                    event_loop.shutdown();
+                    return
+                }
+            }
+        }
+
     }
 
     fn notify(&mut self, event_loop: &mut EventLoop<Self>, msg: LoopMsg) {
+        debug!("Notify");
         match msg {
             LoopMsg::Service(t, m) => {
                 self.services.get_mut(t)
@@ -119,16 +141,16 @@ impl Handler for LoopHandler {
         }
     }
 
-    // fn timeout(&mut self, _event_loop: &mut EventLoop<Self>, _timeout: Self::Timeout) {
-    //
-    // }
+    fn timeout(&mut self, _event_loop: &mut EventLoop<Self>, _timeout: Self::Timeout) {
+        debug!("Timeout triggered");
+    }
 
     fn interrupted(&mut self, event_loop: &mut EventLoop<Self>) {
         info!("Interrupted");
         event_loop.shutdown();
     }
 
-    // fn tick(&mut self, _event_loop: &mut EventLoop<Self>) {
-    //
-    // }
+    fn tick(&mut self, _event_loop: &mut EventLoop<Self>) {
+        debug!("Mio Loop Tick");
+    }
 }

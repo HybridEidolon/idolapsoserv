@@ -48,7 +48,7 @@ impl DataService {
         } = self;
 
         info!("Data service running");
-        
+
         for msg in receiver.iter() {
             match msg {
                 ServiceMsg::ClientConnected(id) => {
@@ -94,7 +94,6 @@ impl DataService {
                             sender.send(LoopMsg::Client(id,
                                 Message::SendDone(None).into()
                             )).unwrap();
-                            sender.send(LoopMsg::DropClient(id)).unwrap();
                             info!("client {} was 'updated' successfully", id);
                         },
                         _ => { warn!("client sent weird message") }
