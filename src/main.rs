@@ -17,6 +17,7 @@ extern crate rustc_serialize;
 extern crate staticvec;
 
 pub mod patch;
+pub mod data;
 pub mod game;
 pub mod login;
 pub mod bb;
@@ -34,7 +35,8 @@ use docopt::Docopt;
 use mio::EventLoop;
 
 use ::loop_handler::LoopHandler;
-use ::services::patch::PatchService;
+use ::patch::PatchService;
+use ::data::DataService;
 
 fn main() {
     let args: Args = Docopt::new(USAGE_STRING)
@@ -56,6 +58,7 @@ fn main() {
 
     let mut services = Vec::new();
     services.push(PatchService::spawn(&"127.0.0.1:11000".parse().unwrap(), event_loop.channel()));
+    services.push(DataService::spawn(&"127.0.0.1:11001".parse().unwrap(), event_loop.channel()));
 
     let mut loop_handler = LoopHandler::new(services, &mut event_loop);
 

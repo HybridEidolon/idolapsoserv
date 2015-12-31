@@ -3,7 +3,7 @@ use mio::util::Slab;
 
 use ::services::{Service, ServiceMsg};
 
-use psomsg::patch::Message;
+use ::services::message::NetMsg;
 
 #[derive(Clone)]
 pub enum LoopMsg {
@@ -11,7 +11,10 @@ pub enum LoopMsg {
     Service(Token, ServiceMsg),
 
     /// Send a message to a client.
-    Client(usize, Box<Message>)
+    Client(usize, NetMsg),
+
+    /// Drop a client
+    DropClient(usize)
 }
 
 pub struct LoopHandler {
@@ -87,6 +90,16 @@ impl Handler for LoopHandler {
                     })
                     .unwrap_or_else(|| {
                         error!("no client?")
+                    });
+            },
+            LoopMsg::DropClient(t) => {
+                self.services.iter_mut()
+                    .find(|s| s.has_client(Token(t)))
+                    .map(|s| {
+                        s.drop_client(event_loop, Token(t));
+                    })
+                    .unwrap_or_else(|| {
+                        error!("attempted to drop client {} but doesn't exist", t)
                     });
             }
         }

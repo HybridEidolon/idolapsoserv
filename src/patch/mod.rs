@@ -1,203 +1,89 @@
-//! Structures for the Patch and Data servers.
+//! The patch service, the root which redirects to data services.
 
-use std::net::{TcpListener, TcpStream, SocketAddrV4};
-use std::io;
-use std::borrow::Borrow;
+use ::services::{Service, ServiceMsg};
+use ::loop_handler::LoopMsg;
+
+use std::sync::mpsc::channel;
+use std::sync::mpsc::Receiver;
+
 use std::thread;
-use std::string::ToString;
 
-use psocrypto::pc::PcCipher;
-use psocrypto::{DecryptReader, EncryptWriter};
+use std::net::SocketAddr;
 
-use psomsg::Serial;
+use mio::tcp::TcpListener;
+use mio::Sender;
 
-use rand::random;
+use psomsg::patch::*;
 
-pub struct PatchServer {
-    motd_template: String,
-    bind: String,
-    data_servers: Vec<SocketAddrV4>
+use ::services::message::NetMsg;
+
+use ::services::ServiceType;
+
+pub struct PatchService {
+    receiver: Receiver<ServiceMsg>,
+    sender: Sender<LoopMsg>
 }
 
-pub struct DataServer {
-    bind: String
-}
+impl PatchService {
+    pub fn spawn(bind: &SocketAddr, sender: Sender<LoopMsg>) -> Service {
+        let (tx, rx) = channel();
 
-pub struct ClientContext {
-    stream: TcpStream,
-    motd: String,
-    data_addr: Option<SocketAddrV4>
-}
+        let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
 
-impl ClientContext {
-    pub fn run(&mut self) -> () {
-        use psomsg::patch::*;
+        thread::spawn(move|| {
+            let p = PatchService {
+                receiver: rx,
+                sender: sender
+            };
+            p.run()
+        });
 
-        let peer_addr = self.stream.peer_addr().unwrap();
+        Service::new(listener, tx, ServiceType::Patch)
+    }
 
-        info!("[{}] connected", peer_addr);
+    pub fn run(self) {
+        let PatchService {
+            receiver,
+            sender
+        } = self;
 
-        let server_cipher = PcCipher::new(random());
-        let client_cipher = PcCipher::new(random());
+        info!("Patch service running");
 
-        let w = Message::Welcome(Some(Welcome {
-            server_vector: server_cipher.seed(),
-            client_vector: client_cipher.seed()
-        }));
-        if let Err(e) = w.serialize(&mut self.stream) {
-            error!("unable to send welcome message to {}: {}", peer_addr, e);
-        }
-        info!("[{}] welcomed", peer_addr);
-
-        // now wrap our stream in crypto
-        let mut w_s = EncryptWriter::new(self.stream.try_clone().unwrap(), server_cipher);
-        let mut r_s = DecryptReader::new(self.stream.try_clone().unwrap(), client_cipher);
-
-        // Client will send a Welcome message as an ack. We reply with a Login ack.
-        if let Ok(s) = Message::deserialize(&mut r_s) {
-            if let Message::Welcome(None) = s {
-                info!("[{}] responded to welcome", peer_addr);
-                match Message::Login(None).serialize(&mut w_s) { Err(_) => return, _ => () }
+        // This service only responds to events; it does not run its own bookkeeping.
+        for msg in receiver.iter() {
+            match msg {
+                ServiceMsg::ClientConnected(id) => {
+                    println!("Client {} connected to patch service", id);
+                    let w = Message::Welcome(Some(Welcome { server_vector: 0, client_vector: 0 }));
+                    sender.send(LoopMsg::Client(id, w.into())).unwrap();
+                },
+                ServiceMsg::ClientDisconnected(id) => {
+                    println!("Client {} disconnected from patch service.", id)
+                },
+                ServiceMsg::ClientSaid(id, NetMsg::Patch(m)) => {
+                    match m {
+                        Message::Welcome(None) => {
+                            sender.send(LoopMsg::Client(id,
+                                Message::Login(None).into()
+                            )).unwrap();
+                        },
+                        Message::Login(Some(..)) => {
+                            sender.send(LoopMsg::Client(id,
+                                Message::Motd(Some(Motd { message: "Hi there\nfriend".to_string() })).into()
+                            )).unwrap();
+                            // TODO send redirect;
+                            sender.send(LoopMsg::Client(id,
+                                Message::Redirect(Some(Redirect("127.0.0.1:11001".parse().unwrap()))).into()
+                            )).unwrap();
+                            sender.send(LoopMsg::DropClient(id)).unwrap();
+                        },
+                        _ => {
+                            warn!("weird message sent by client");
+                        }
+                    }
+                },
+                _ => { unreachable!() }
             }
         }
-
-        loop {
-            // Read message
-            if let Ok(s) = Message::deserialize(&mut r_s) {match s {
-                Message::Login(Some(_)) => {
-                    info!("[{}] logged in, sending motd and redirecting", peer_addr);
-                    let motd = Message::Motd(Some(Motd {
-                        message: self.motd.clone()
-                    }));
-                    motd.serialize(&mut w_s).unwrap();
-                    let red = Message::Redirect(Some(Redirect(self.data_addr.as_ref().unwrap().clone())));
-                    red.serialize(&mut w_s).unwrap();
-                    // Now we break out of this connection.
-                    return;
-                },
-                u => {error!("unexpected message received, exiting: {:?}", u); return}
-            }}
-        };
-    }
-
-    pub fn run_data(&mut self) -> () {
-        use psomsg::patch::*;
-        use staticvec::StaticVec;
-        let peer = self.stream.peer_addr().unwrap();
-
-        info!("connected {}", peer);
-
-        let server_cipher = PcCipher::new(random());
-        let client_cipher = PcCipher::new(random());
-
-        let w = Message::Welcome(Some(Welcome {
-            client_vector: client_cipher.seed(),
-            server_vector: server_cipher.seed()
-        }));
-        w.serialize(&mut self.stream).unwrap();
-
-        // now wrap our stream in crypto
-        let mut w_s = EncryptWriter::new(self.stream.try_clone().unwrap(), server_cipher);
-        let mut r_s = DecryptReader::new(self.stream.try_clone().unwrap(), client_cipher);
-
-        if let Ok(Message::Welcome(None)) = Message::deserialize(&mut r_s) {
-            Message::Login(None).serialize(&mut w_s).unwrap();
-        }
-
-        loop {
-            let m = Message::deserialize(&mut r_s);
-            if let Ok(m) = m {match m {
-                Message::Login(Some(_)) => {
-                    Message::StartList(None).serialize(&mut w_s).unwrap();
-                    Message::SetDirectory(Some(SetDirectory { dirname: StaticVec::default() })).serialize(&mut w_s).unwrap();
-                    Message::InfoFinished(None).serialize(&mut w_s).unwrap();
-                },
-                Message::FileListDone(_) => {
-                    Message::SetDirectory(Some(SetDirectory { dirname: StaticVec::default() })).serialize(&mut w_s).unwrap();
-                    Message::OneDirUp(None).serialize(&mut w_s).unwrap();
-                    Message::SendDone(None).serialize(&mut w_s).unwrap();
-                    info!("client {} was 'updated' successfully", peer);
-                }
-                e => error!("recv something else! {:?}", e)
-            }} else {
-                return
-            }
-        }
-    }
-}
-
-unsafe impl Send for ClientContext {}
-
-impl PatchServer {
-    pub fn new_bb<T: ToString, B: ToString>(motd_template: T, bind: B, data_servers: &[SocketAddrV4]) -> PatchServer {
-        PatchServer {
-            motd_template: motd_template.to_string(),
-            bind: bind.to_string(),
-            data_servers: data_servers.to_owned()
-        }
-    }
-
-    pub fn format_motd(&self, client_num: u32) -> String {
-        let motd = self.motd_template.replace("{client_num}", &format!("{}", client_num));
-        motd
-    }
-
-    /// Runs the patch server, moving this value. This method will block until the server
-    /// concludes.
-    pub fn run(self) -> io::Result<()> {
-        let bind_addr = self.bind.clone(); // borrow checker just in case
-        let tcp_listener = try!(TcpListener::bind(bind_addr.borrow() as &str));
-
-        let mut total_connects = 0;
-
-        for s in tcp_listener.incoming() {
-            match s {
-                Ok(s) => {
-                    total_connects += 1;
-                    let mut ctx = ClientContext {
-                        stream: s,
-                        motd: self.format_motd(total_connects),
-                        data_addr: Some(self.data_servers[random::<usize>() % self.data_servers.len()])
-                    };
-
-                    thread::spawn(move || {ctx.run();});
-                },
-                Err(e) => {
-                    return Err(e)
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-impl DataServer {
-    pub fn new_bb<B: ToString>(bind: B) -> DataServer {
-        DataServer {
-            bind: bind.to_string()
-        }
-    }
-
-    pub fn run(self) -> io::Result<()> {
-        let bind_addr = self.bind.clone(); // borrow checker just in case
-        let tcp_listener = try!(TcpListener::bind(bind_addr.borrow() as &str));
-
-        for s in tcp_listener.incoming() {
-            match s {
-                Ok(s) => {
-                    let mut ctx = ClientContext {
-                        stream: s,
-                        motd: "".to_string(),
-                        data_addr: None
-                    };
-
-                    thread::spawn(move || {ctx.run_data();});
-                },
-                Err(e) => {
-                    return Err(e)
-                }
-            }
-        }
-        Ok(())
     }
 }

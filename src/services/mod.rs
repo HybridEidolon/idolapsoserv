@@ -1,3 +1,5 @@
+//! Service abstraction for the mio loop handler.
+
 use mio::tcp::TcpListener;
 use mio::{EventLoop, EventSet, Handler, PollOpt, Token};
 use mio::util::Slab;
@@ -5,34 +7,45 @@ use mio::util::Slab;
 use std::io;
 use std::sync::mpsc::Sender as MpscSender;
 
-use psomsg::patch::Message;
+pub mod client;
+pub mod message;
 
-mod client;
-pub mod patch;
+use self::client::{Client, PatchClient, ClientHandler};
 
-pub use self::client::Client;
+use self::message::NetMsg;
 
 #[derive(Clone)]
 pub enum ServiceMsg {
     ClientConnected(usize),
-    ClientSaid(usize, Box<Message>),
+    ClientSaid(usize, NetMsg),
     ClientDisconnected(usize)
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ServiceType {
+    /// Uses the Patch namespace in `psomsg::patch`
+    Patch,
+    /// Uses the Blue Burst namespace in `psomsg::bb`
+    Bb
+}
+
+/// A communication handle for a service.
 pub struct Service {
     pub listener: TcpListener,
     pub token: Token,
     clients: Slab<Client>,
-    pub sender: MpscSender<ServiceMsg>
+    pub sender: MpscSender<ServiceMsg>,
+    service_type: ServiceType
 }
 
 impl Service {
-    pub fn new(listener: TcpListener, sender: MpscSender<ServiceMsg>) -> Service {
+    pub fn new(listener: TcpListener, sender: MpscSender<ServiceMsg>, service_type: ServiceType) -> Service {
         Service {
             listener: listener,
             token: Token(0),
             clients: Slab::new(0),
-            sender: sender
+            sender: sender,
+            service_type: service_type
         }
     }
 
@@ -71,8 +84,12 @@ impl Service {
 
         // With the new socket, we now create a client for it and register it.
         let sender_clone = self.sender.clone();
+        let st = self.service_type;
         match self.clients.insert_with(|token| {
-            Client::new(sock, token, sender_clone)
+            match st {
+                ServiceType::Patch => Client::Patch(PatchClient::new(sock, token, sender_clone)),
+                _ => unimplemented!()
+            }
         }) {
             Some(token) => {
                 // inserted successfully
@@ -124,9 +141,15 @@ impl Service {
         }
     }
 
-    pub fn notify_client<H: Handler>(&mut self, event_loop: &mut EventLoop<H>, token: Token, msg: Box<Message>) {
+    pub fn notify_client<H: Handler>(&mut self, event_loop: &mut EventLoop<H>, token: Token, msg: NetMsg) {
         self.clients.get_mut(token).map(|c| {
             c.send_msg(event_loop, msg)
+        });
+    }
+
+    pub fn drop_client<H: Handler>(&mut self, event_loop: &mut EventLoop<H>, token: Token) {
+        self.clients.get_mut(token).map(|c| {
+            c.drop_client(event_loop)
         });
     }
 }

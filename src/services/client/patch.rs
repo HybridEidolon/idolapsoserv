@@ -11,6 +11,10 @@ use psomsg::Serial;
 
 use ::services::ServiceMsg;
 
+use ::services::message::NetMsg;
+
+use super::{padded, ClientHandler};
+
 #[derive(Clone, Copy)]
 enum SendState {
     WaitingForMsg,
@@ -33,22 +37,22 @@ impl Default for ReadState {
     fn default() -> ReadState { ReadState::ReadingHdr(0) }
 }
 
-pub struct Client {
+pub struct PatchClient {
     pub stream: TcpStream,
     pub token: Token,
     pub ciphers: Option<(PcCipher, PcCipher)>,
     interests: EventSet,
     sender: MpscSender<ServiceMsg>,
-    send_queue: VecDeque<Box<Message>>,
+    send_queue: VecDeque<Message>,
     send_state: SendState,
     read_state: ReadState,
     send_buffer: Vec<u8>,
     read_buffer: Vec<u8>,
 }
 
-impl Client {
-    pub fn new(stream: TcpStream, token: Token, thread_sender: MpscSender<ServiceMsg>) -> Client {
-        Client {
+impl PatchClient {
+    pub fn new(stream: TcpStream, token: Token, thread_sender: MpscSender<ServiceMsg>) -> PatchClient {
+        PatchClient {
             stream: stream,
             token: token,
             ciphers: None,
@@ -61,8 +65,10 @@ impl Client {
             read_buffer: vec![0; 4096]
         }
     }
-
-    pub fn register<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
+}
+impl ClientHandler for PatchClient {
+    type Msg = Message;
+    fn register<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         // We will probably want to know when to read first.
         // The event loop notify() will tell us when we want to write.
         self.interests.insert(EventSet::readable());
@@ -75,7 +81,7 @@ impl Client {
         )
     }
 
-    pub fn reregister<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
+    fn reregister<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         event_loop.reregister(
             &self.stream,
             self.token,
@@ -84,7 +90,7 @@ impl Client {
         )
     }
 
-    pub fn readable<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
+    fn readable<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         use std::io::Cursor;
         // Do nothing; this is unimplemented
         // At some point, read into a buffer the header, then the body, then
@@ -159,9 +165,9 @@ impl Client {
                                 c.decrypt_in_place(&mut self.read_buffer[4..size]).unwrap();
                             }
                             // parse into message
-                            let message = Box::new(try!(Message::deserialize(&mut Cursor::new(&self.read_buffer[0..size]))));
+                            let message = try!(Message::deserialize(&mut Cursor::new(&self.read_buffer[0..size])));
                             // send message to service thread
-                            match self.sender.send(ServiceMsg::ClientSaid(self.token.0, message)) {
+                            match self.sender.send(ServiceMsg::ClientSaid(self.token.0, NetMsg::Patch(message))) {
                                 Ok(_) => (),
                                 Err(e) => {
                                     error!("Failed to send client message to service thread.");
@@ -186,7 +192,7 @@ impl Client {
         }}
     }
 
-    pub fn writable<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
+    fn writable<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         use psomsg::Serial;
         use std::io::Cursor;
         use std::mem::swap;
@@ -214,7 +220,7 @@ impl Client {
                             Welcome {
                                 ref server_vector,
                                 ref client_vector
-                            })) = msg.as_ref() {
+                            })) = &msg {
                                 self.ciphers = Some((
                                     PcCipher::new(*server_vector),
                                     PcCipher::new(*client_vector)
@@ -263,18 +269,14 @@ impl Client {
         } }
     }
 
-    pub fn send_msg<H: Handler>(&mut self, event_loop: &mut EventLoop<H>, msg: Box<Message>) -> io::Result<()> {
+    fn send_msg<H: Handler>(&mut self, event_loop: &mut EventLoop<H>, msg: Message) -> io::Result<()> {
         self.send_queue.push_back(msg);
         self.interests.insert(EventSet::writable());
         self.reregister(event_loop)
     }
-}
 
-#[inline(always)]
-fn padded(value: usize, multiple: usize) -> usize {
-    if value % 4 != 0 {
-        value + (multiple - value % multiple)
-    } else {
-        value
+    fn drop_client<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
+        // unregister self; service will remove token and stream from slab
+        event_loop.deregister(&self.stream)
     }
 }
