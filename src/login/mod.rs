@@ -1,10 +1,6 @@
-//! Login server structures.
+//! The login service, forwards to a random ship which provides
+//! ship selection information.
 
 pub mod bb;
-pub mod paramfiles;
 
-// TODO dc/pc
-//pub mod pc;
-
-// TODO gc
-//pub mod gc;
+pub use self::bb::BbLoginService;

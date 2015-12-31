@@ -2,9 +2,12 @@ use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 
 use toml::{Parser, Table};
 
+use ::game::Version;
+
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub data_path: Option<String>,
+    pub data_path: String,
+    pub bb_keytable_path: String,
     pub services: Vec<ServiceConf>
 }
 
@@ -19,6 +22,13 @@ pub enum ServiceConf {
     Data {
         bind: SocketAddr
     },
+    Login {
+        bind: SocketAddr,
+        version: Version
+        // The login service just redirects to one of the ship servers.
+        // In this implementation, the ship servers act as a character server
+        // for BB.
+    }
     // ...
 }
 
@@ -34,8 +44,16 @@ impl Config {
 
     pub fn from_toml_value(t: &Table) -> Result<Config, String> {
         let data_path;
+        let bb_keytable_path;
         if let Some(i) = t.get("idola") {
-            data_path = i.lookup("data_path").and_then(|v| v.as_str()).map(|s| s.to_string());
+            data_path = i.lookup("data_path")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or("data".to_string());
+            bb_keytable_path = i.lookup("bb_keytable_path")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or(format!("{}/crypto/bb_table.bin", data_path));
         } else {
             return Err("No idola section".to_string())
         }
@@ -50,6 +68,7 @@ impl Config {
         }
         Ok(Config {
             data_path: data_path,
+            bb_keytable_path: bb_keytable_path,
             services: services
         })
     }
@@ -90,6 +109,20 @@ impl ServiceConf {
                             bind: bind
                         })
                     },
+                    "login" => {
+                        let version;
+                        match t.get("version")
+                            .and_then(|v| v.as_str())
+                            .map(|v| v.parse()) {
+                            Some(Ok(v)) => version = v,
+                            Some(Err(e)) => return Err(e),
+                            None => return Err("No version specified for login service".to_string())
+                        }
+                        Ok(ServiceConf::Login {
+                            bind: bind,
+                            version: version
+                        })
+                    }
                     _ => return Err("invalid service type specified".to_string())
                 }
             } else {

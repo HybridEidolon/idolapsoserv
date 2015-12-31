@@ -1,5 +1,8 @@
 [idola]
+# Optional: path to data folder
 data_path = "data"
+# Optional: path to Blue Burst crypto key table
+bb_keytable_path = "data/crypto/bb_table.bin"
 
 # The PSOBB Tethealla localhost client is set to connect to 127.0.0.1:11000,
 # NOT localhost:11000. Therefore, the service binds here MUST be on the
@@ -19,8 +22,7 @@ type = "patch"
 # the Internet. In this example, 127.0.0.1 is fine, because we are only binding
 # on loopback anyway.
 v4_servers = [
-    "127.0.0.1:11001",
-    "127.0.0.1:11002"
+    "127.0.0.1:11001"
 ]
 # Optional: Randomize load-balancing for data servers instead of round-robin.
 random_balance = false
@@ -58,5 +60,7 @@ bind = "127.0.0.1:11001"
 type = "data"
 
 [[service]]
-bind = "127.0.0.1:11002"
-type = "data"
+bind = "127.0.0.1:12000"
+type = "login"
+# The only currently supported version is BlueBurst.
+version = "BlueBurst"

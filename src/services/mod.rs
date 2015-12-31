@@ -10,9 +10,11 @@ use std::sync::mpsc::Sender as MpscSender;
 pub mod client;
 pub mod message;
 
-use self::client::{Client, PatchClient, ClientHandler};
+use self::client::{Client, PatchClient, BbClient, ClientHandler};
 
 use self::message::NetMsg;
+
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub enum ServiceMsg {
@@ -21,12 +23,12 @@ pub enum ServiceMsg {
     ClientDisconnected(usize)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum ServiceType {
     /// Uses the Patch namespace in `psomsg::patch`
     Patch,
-    /// Uses the Blue Burst namespace in `psomsg::bb`
-    Bb
+    /// Uses the Blue Burst namespace in `psomsg::bb`. 0 is the crypto key table
+    Bb(Arc<Vec<u32>>)
 }
 
 /// A communication handle for a service.
@@ -84,11 +86,12 @@ impl Service {
 
         // With the new socket, we now create a client for it and register it.
         let sender_clone = self.sender.clone();
-        let st = self.service_type;
+        let st = self.service_type.clone();
         match self.clients.insert_with(|token| {
             match st {
                 ServiceType::Patch => Client::Patch(PatchClient::new(sock, token, sender_clone)),
-                _ => unimplemented!()
+                ServiceType::Bb(ref kt) => Client::Bb(BbClient::new(sock, token, sender_clone, kt.clone())),
+                //_ => unimplemented!()
             }
         }) {
             Some(token) => {
@@ -125,9 +128,11 @@ impl Service {
     pub fn ready<H: Handler>(&mut self, event_loop: &mut EventLoop<H>, token: Token, events: EventSet) {
         self.clients.get_mut(token).map(|c| {
             if events.contains(EventSet::readable()) {
+                debug!("Reading from client token {}", token.0);
                 c.readable(event_loop).unwrap();
             }
             if events.contains(EventSet::writable()) {
+                debug!("Writing to client token {}", token.0);
                 c.writable(event_loop).unwrap();
             }
         });

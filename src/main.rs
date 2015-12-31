@@ -40,10 +40,15 @@ use mio::EventLoop;
 use ::loop_handler::LoopHandler;
 use ::patch::PatchService;
 use ::data::DataService;
+use ::login::bb::BbLoginService;
 
 use ::config::Config;
 
 use std::fs::File;
+use std::sync::Arc;
+
+use ::game::Version;
+use ::bb::read_key_table;
 
 fn main() {
     env_logger::init().expect("env_logger failed to initialize");
@@ -66,6 +71,13 @@ fn main() {
         config = Config::from_toml_string(&config_string).expect("Failed to parse TOML");
     }
 
+    // Load the bb key table.
+    let bb_keytable;
+    {
+        let mut keytable_file = File::open(&config.bb_keytable_path).expect("Failed to open BB keytable file");
+        bb_keytable = Arc::new(read_key_table(&mut keytable_file).expect("Failed to parse BB keytable"));
+    }
+
     // 1. Create EventLoop.
     // 2. Spin up service threads to get handles.
     // 3. Create LoopHandler and register services.
@@ -83,6 +95,15 @@ fn main() {
             &ServiceConf::Data { ref bind, .. } => {
                 println!("Data service at {:?}", bind);
                 services.push(DataService::spawn(bind, event_loop.channel()));
+            },
+            &ServiceConf::Login { ref bind, version, .. } => {
+                println!("Login service at {:?}", bind);
+                match version {
+                    Version::BlueBurst => {
+                        services.push(BbLoginService::spawn(bind, event_loop.channel(), bb_keytable.clone()))
+                    },
+                    _ => unimplemented!()
+                }
             }
         }
     }

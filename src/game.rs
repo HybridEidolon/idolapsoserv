@@ -1,5 +1,7 @@
 use std::fmt;
 
+use std::str::FromStr;
+
 /// An enumeration of PSO versions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Version {
@@ -15,6 +17,22 @@ pub enum Version {
     DCV2,
     /// Phantasy Star Online
     DCV1
+}
+
+impl FromStr for Version {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Version, Self::Err> {
+        use self::Version::*;
+        match s {
+            "BlueBurst" => Ok(BlueBurst),
+            "Gamecube" => Ok(Gamecube),
+            "Episode3" => Ok(Episode3),
+            "PC" => Ok(PC),
+            "DCV2" => Ok(DCV2),
+            "DCV1" => Ok(DCV1),
+            _ => Err(format!("Unknown version {}", s))
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
