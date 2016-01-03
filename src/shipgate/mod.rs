@@ -9,9 +9,12 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use mio::tcp::TcpListener;
 use mio::Sender;
+
+use psodb_common::pool::Pool;
 
 use ::services::message::NetMsg;
 use ::services::{ServiceType, Service, ServiceMsg};
@@ -21,29 +24,36 @@ use ::shipgate::msg::*;
 
 pub mod msg;
 pub mod client;
+mod handler;
+
+use self::handler::MsgHandler;
 
 pub struct ShipGateService {
     receiver: Receiver<ServiceMsg>,
     sender: Sender<LoopMsg>,
     password: String,
-    clients: HashMap<usize, ClientCtx>
+    clients: HashMap<usize, ClientCtx>,
+    pool: Arc<Pool>
 }
 
+
 #[derive(Clone)]
-struct ClientCtx {
+pub struct ClientCtx {
+    id: usize,
     authenticated: bool
 }
 
 impl Default for ClientCtx {
     fn default() -> ClientCtx {
         ClientCtx {
+            id: 0,
             authenticated: false
         }
     }
 }
 
 impl ShipGateService {
-    pub fn spawn(bind: &SocketAddr, sender: Sender<LoopMsg>, password: &str) -> Service {
+    pub fn spawn(bind: &SocketAddr, sender: Sender<LoopMsg>, password: &str, pool: Arc<Pool>) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -54,7 +64,8 @@ impl ShipGateService {
                 receiver: rx,
                 sender: sender,
                 password: pw,
-                clients: Default::default()
+                clients: Default::default(),
+                pool: pool
             };
             p.run()
         });
@@ -65,12 +76,17 @@ impl ShipGateService {
     pub fn run(mut self) {
         info!("ShipGate service running");
 
-        for msg in self.receiver.iter() {
+        loop {
+            let msg = match self.receiver.recv() {
+                Ok(m) => m,
+                Err(_) => return // receiver closed; we can exit service
+            };
             match msg {
                 ServiceMsg::ClientConnected(id) => {
                     info!("Client {} connected to shipgate", id);
                     // create a new client context
-                    let ctx = ClientCtx::default();
+                    let mut ctx = ClientCtx::default();
+                    ctx.id = id;
                     self.clients.insert(id, ctx);
                 },
                 ServiceMsg::ClientDisconnected(id) => {
@@ -78,19 +94,26 @@ impl ShipGateService {
                     self.clients.remove(&id);
                 },
                 ServiceMsg::ClientSaid(id, NetMsg::ShipGate(m)) => {
-                    let c = self.clients[&id].clone();
+                    let mut c = match self.clients.get_mut(&id) {
+                        Some(c) => c,
+                        None => unreachable!()
+                    };
+
                     if c.authenticated {
-                        match m {
-                            Message::BbLoginChallenge(res, BbLoginChallenge { client_id, .. }) => {
-                                // TODO comm with db
-                                self.sender.send((id, Message::BbLoginChallengeAck(res, BbLoginChallengeAck { client_id: client_id, status: 2 })).into()).unwrap()
+                        let mut handler = MsgHandler::new(self.pool.clone(), c);
+                        let (req, mut response): (u32, Message) = match m {
+                            Message::BbLoginChallenge(req, body) => {
+                                info!("Client Request {} received from client {}", req, id);
+                                (req, handler.handle_login_challenge(body).into())
                             },
-                            _ => () // silently ignore
-                        }
+                            _ => unimplemented!()
+                        };
+                        response.set_response_key(req);
+                        self.sender.send((id, response).into()).unwrap();
                     } else {
                         if let Message::Auth(res, Auth(version, pw)) = m {
                             if version == 0 && pw == self.password {
-                                self.clients.get_mut(&id).unwrap().authenticated = true;
+                                c.authenticated = true;
                                 self.sender.send((id, Message::AuthAck(res, AuthAck)).into()).unwrap();
                                 info!("Shipgate client {} successfully authenticated", id);
                                 continue

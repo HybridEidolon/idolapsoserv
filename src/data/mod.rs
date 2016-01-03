@@ -52,12 +52,12 @@ impl DataService {
         for msg in receiver.iter() {
             match msg {
                 ServiceMsg::ClientConnected(id) => {
-                    println!("Client {} connected to data service", id);
+                    info!("Client {} connected to data service", id);
                     let w = Message::Welcome(Some(Welcome { server_vector: 0, client_vector: 0 }));
                     sender.send(LoopMsg::Client(id, w.into())).unwrap();
                 },
                 ServiceMsg::ClientDisconnected(id) => {
-                    println!("Client {} disconnected from data service.", id)
+                    info!("Client {} disconnected from data service.", id)
 
                 },
                 ServiceMsg::ClientSaid(id, NetMsg::Patch(m)) => {
@@ -96,7 +96,7 @@ impl DataService {
                             )).unwrap();
                             info!("client {} was 'updated' successfully", id);
                         },
-                        _ => { warn!("client sent weird message") }
+                        u => { warn!("client sent weird message: {:?}", u) }
                     }
                 },
                 _ => unreachable!()

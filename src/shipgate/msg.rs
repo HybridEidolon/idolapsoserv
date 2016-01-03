@@ -157,24 +157,20 @@ derive_serial!(AuthAck);
 
 #[derive(Clone, Debug)]
 pub struct BbLoginChallenge {
-    pub client_id: u64,
     pub username: String,
     pub password: String
 }
 impl Serial for BbLoginChallenge {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        try!(self.client_id.serialize(dst));
         try!(write_utf16(&self.username, dst));
         try!(write_utf16(&self.password, dst));
         Ok(())
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        let client_id = try!(Serial::deserialize(src));
         let username = try!(read_utf16(src));
         let password = try!(read_utf16(src));
         Ok(BbLoginChallenge {
-            client_id: client_id,
             username: username,
             password: password
         })
@@ -183,7 +179,20 @@ impl Serial for BbLoginChallenge {
 
 derive_serial! {
     BbLoginChallengeAck {
-        pub client_id: u64,
-        pub status: u32
+        pub status: u32,
+        pub account_id: u32
+    }
+}
+
+derive_serial! {
+    BbGetGuildCardNum {
+        pub account_id: u32
+    }
+}
+
+derive_serial! {
+    BbGetGuildCardNumAck {
+        pub account_id: u32,
+        pub guildcard: u32
     }
 }

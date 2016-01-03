@@ -8,10 +8,16 @@ INSERT OR REPLACE INTO version (version) VALUES (0);
 
 CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    password_hash TEXT,
-    password_invalidated INTEGER,
-    banned INTEGER
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    password_invalidated INTEGER NOT NULL DEFAULT 0,
+    banned INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS bb_guildcard (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL DEFAULT 400000000,
+    account_id INTEGER UNIQUE NOT NULL,
+    data BLOB NOT NULL
 );
 
 COMMIT;

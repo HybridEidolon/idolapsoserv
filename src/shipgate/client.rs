@@ -29,12 +29,28 @@ enum ClientMsg {
 
 #[derive(Clone)]
 pub struct ShipGateSender {
-    tx: Sender<ClientMsg>
+    tx: Sender<ClientMsg>,
+    cb_sender: Option<Sender<ServiceMsg>>,
+    req_counter: u32
 }
 
 impl ShipGateSender {
-    pub fn send(&mut self, callback: Sender<ServiceMsg>, msg: Message) -> Result<(), String> {
-        self.tx.send(ClientMsg::Send(callback, msg)).map_err(|e| format!("{}", e))
+    pub fn send(&mut self, mut msg: Message) -> Result<u32, String> {
+        match self.cb_sender {
+            Some(ref cbs) => {
+                msg.set_response_key(self.req_counter);
+                self.req_counter += 1;
+                self.tx.send(ClientMsg::Send(cbs.clone(), msg))
+                    .map_err(|e| format!("{}", e)).map(|_| self.req_counter - 1)
+            },
+            None => Err("This sender does not have a callback sender specified.".to_string())
+        }
+    }
+
+    pub fn clone_with(&self, cb_sender: Sender<ServiceMsg>) -> ShipGateSender {
+        let mut r = self.clone();
+        r.cb_sender = Some(cb_sender);
+        r
     }
 }
 
@@ -50,8 +66,8 @@ impl ShipGateClient {
                 receiver: rx,
                 stream: s_c,
                 responders: Default::default(),
-                response_counter: 0,
-                password: pw
+                password: pw,
+                response_counter: 0
             };
             c.run()
         });
@@ -72,7 +88,9 @@ impl ShipGateClient {
         });
 
         ShipGateSender {
-            tx: tx
+            tx: tx,
+            req_counter: 0,
+            cb_sender: None
         }
     }
 
@@ -83,8 +101,7 @@ impl ShipGateClient {
 
         for msg in self.receiver.iter() {
             match msg {
-                ClientMsg::Send(callback, mut m) => {
-                    m.set_response_key(self.response_counter);
+                ClientMsg::Send(callback, m) => {
                     self.responders.insert(self.response_counter, callback);
                     self.response_counter += 1;
                     m.serialize(&mut self.stream).unwrap();

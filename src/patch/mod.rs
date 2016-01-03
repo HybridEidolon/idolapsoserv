@@ -60,12 +60,12 @@ impl PatchService {
         for msg in self.receiver.iter() {
             match msg {
                 ServiceMsg::ClientConnected(id) => {
-                    println!("Client {} connected to patch service", id);
+                    info!("Client {} connected to patch service", id);
                     let w = Message::Welcome(Some(Welcome { server_vector: 0, client_vector: 0 }));
                     self.sender.send(LoopMsg::Client(id, w.into())).unwrap();
                 },
                 ServiceMsg::ClientDisconnected(id) => {
-                    println!("Client {} disconnected from patch service.", id)
+                    info!("Client {} disconnected from patch service.", id)
                 },
                 ServiceMsg::ClientSaid(id, NetMsg::Patch(m)) => {
                     match m {
@@ -83,8 +83,8 @@ impl PatchService {
                             }
                             self.next %= self.v4_servers.len();
                         },
-                        _ => {
-                            warn!("weird message sent by client");
+                        u => {
+                            warn!("weird patch message sent by client: {:?}", u);
                         }
                     }
                 },

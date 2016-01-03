@@ -2,6 +2,10 @@ use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 
 use toml::{Parser, Table};
 
+use psodb_common::pool::Pool;
+use psodb_common::Result as DbResult;
+use psodb_sqlite::Sqlite;
+
 use ::game::Version;
 
 #[derive(Debug, Clone)]
@@ -43,6 +47,18 @@ pub enum ServiceConf {
 pub enum DbConf {
     Sqlite {
         file: String
+    }
+}
+
+impl DbConf {
+    pub fn make_pool(&self) -> DbResult<Pool> {
+        match self {
+            &DbConf::Sqlite { ref file } => {
+                let mut s = try!(Sqlite::new(file.as_ref(), true));
+                let p = try!(Pool::new(1, &mut s));
+                Ok(p)
+            }
+        }
     }
 }
 

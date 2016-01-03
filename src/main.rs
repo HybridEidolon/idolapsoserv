@@ -90,8 +90,9 @@ fn main() {
     let mut sg: Option<Service> = None;
     if let Some(c) = config.services.iter().find(|c| if let _e @ &&ServiceConf::ShipGate {..} = c { true } else { false } ) {
         match c {
-            &ServiceConf::ShipGate { ref bind, ref password, .. } => {
-                sg = Some(ShipGateService::spawn(bind, event_loop.channel(), password));
+            &ServiceConf::ShipGate { ref bind, ref password, ref db } => {
+                let pool = Arc::new(db.make_pool().expect("Couldn't make database pool for ShipGate."));
+                sg = Some(ShipGateService::spawn(bind, event_loop.channel(), password, pool));
             },
             _ => unreachable!()
         }
@@ -115,7 +116,7 @@ fn main() {
                 println!("Login service at {:?}", bind);
                 match version {
                     Version::BlueBurst => {
-                        services.push(BbLoginService::spawn(bind, event_loop.channel(), bb_keytable.clone(), sg_sender.clone()))
+                        services.push(BbLoginService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender))
                     },
                     _ => unimplemented!()
                 }
