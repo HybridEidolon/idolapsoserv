@@ -103,11 +103,11 @@ impl ShipGateService {
                         let mut handler = MsgHandler::new(self.pool.clone(), c);
                         let (req, mut response): (u32, Message) = match m {
                             Message::BbLoginChallenge(req, body) => {
-                                info!("Client Request {} received from client {}", req, id);
                                 (req, handler.handle_login_challenge(body).into())
                             },
                             _ => unimplemented!()
                         };
+                        info!("Client Request {} received from client {}", req, id);
                         response.set_response_key(req);
                         self.sender.send((id, response).into()).unwrap();
                     } else {

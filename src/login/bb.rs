@@ -5,9 +5,6 @@ use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::thread;
 use std::net::SocketAddr;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 use mio::tcp::TcpListener;
 use mio::Sender;
@@ -21,64 +18,32 @@ use ::services::ServiceType;
 use std::sync::Arc;
 use rand::random;
 
-use ::shipgate::client::ShipGateSender;
+use ::shipgate::client::SgSender;
+use ::shipgate::client::callbacks::SgCbMgr;
 use ::shipgate::msg::{BbLoginChallenge,
     BbLoginChallengeAck,
     Message as Sgm};
 
+
 pub struct BbLoginService {
     receiver: Receiver<ServiceMsg>,
     sender: Sender<LoopMsg>,
-    sg_sender: SgSendWrap
+    sg_sender: SgCbMgr<BbLoginHandler>
 }
 
 struct BbLoginHandler {
     sender: Sender<LoopMsg>,
-    sg_sender: SgSendWrap,
+    sg_sender: SgCbMgr<BbLoginHandler>,
     client_id: usize
 }
 
-#[derive(Clone)]
-struct SgSendWrap {
-    pub sender: ShipGateSender,
-    pub callbacks: Rc<RefCell<HashMap<u32, (usize, Box<FnMut(BbLoginHandler, Sgm)>)>>>
-}
-
-impl SgSendWrap {
-    pub fn new(s: ShipGateSender) -> SgSendWrap {
-        SgSendWrap {
-            sender: s,
-            callbacks: Default::default()
-        }
-    }
-
-    pub fn send<M: Into<Sgm>, CB>(&mut self, m: M, cid: usize, cb: CB) -> Result<(), String>
-        where CB: FnMut(BbLoginHandler, Sgm) + 'static {
-        match self.sender.send(m.into())
-            .map_err(|e| format!("{}", e))
-        {
-            Ok(req) => {
-                info!("Request sent with ID {}", req);
-                self.callbacks.borrow_mut().insert(req, (cid, Box::new(cb)));
-                Ok(())
-            },
-            Err(e) => Err(e)
-        }
-    }
-}
-
 impl BbLoginHandler {
-    fn new(sender: Sender<LoopMsg>, sg_sender: SgSendWrap, client_id: usize) -> BbLoginHandler {
+    fn new(sender: Sender<LoopMsg>, sg_sender: SgCbMgr<BbLoginHandler>, client_id: usize) -> BbLoginHandler {
         BbLoginHandler {
             sender: sender,
             sg_sender: sg_sender,
             client_id: client_id
         }
-    }
-
-    fn sg_send<M: Into<Sgm>, CB>(&mut self, m: M, cb: CB) -> Result<(), String>
-    where CB: FnMut(BbLoginHandler, Sgm) + 'static {
-        self.sg_sender.send(m, self.client_id, cb)
     }
 
     fn handle_login(&mut self, m: BbLogin) {
@@ -87,10 +52,11 @@ impl BbLoginHandler {
         // the ships for the character step.
         info!("Client {} attempted BB Login", self.client_id);
         let m = BbLoginChallenge { username: m.username.clone(), password: m.password.clone() };
-        self.sg_send(m, move|mut h, m| h.handle_sg_login_ack(m)).unwrap();
+        self.sg_sender.request(self.client_id, m, move|mut h, m| h.handle_sg_login_ack(m)).unwrap();
     }
 
     fn handle_sg_login_ack(&mut self, m: Sgm) {
+        info!("Shipgate login ack");
         if let Sgm::BbLoginChallengeAck(_, BbLoginChallengeAck { status, .. }) = m {
             info!("Shipgate acknowledged login request.");
             let mut sdata = BbSecurityData::default();
@@ -117,7 +83,7 @@ impl BbLoginHandler {
 }
 
 impl BbLoginService {
-    pub fn spawn(bind: &SocketAddr, sender: Sender<LoopMsg>, key_table: Arc<Vec<u32>>, sg_sender: &ShipGateSender) -> Service {
+    pub fn spawn(bind: &SocketAddr, sender: Sender<LoopMsg>, key_table: Arc<Vec<u32>>, sg_sender: &SgSender) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -128,7 +94,7 @@ impl BbLoginService {
             let d = BbLoginService {
                 receiver: rx,
                 sender: sender,
-                sg_sender: SgSendWrap::new(sg_sender)
+                sg_sender: sg_sender.into()
             };
             d.run()
         });
@@ -179,7 +145,7 @@ impl BbLoginService {
                     info!("Shipgate Request {}: Response received", req);
                     let cb;
                     {
-                        cb = self.sg_sender.callbacks.borrow_mut().remove(&req);
+                        cb = self.sg_sender.cb_for_req(req)
                     }
 
                     match cb {

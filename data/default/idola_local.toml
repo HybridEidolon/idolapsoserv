@@ -56,6 +56,10 @@ for more information.
 #type = "patch"
 
 ## Patch Data ##
+# Patch Data is a mirror server that serves updated files for the client.
+# Though the client requires a redirect to one of these, it is not required to
+# have more than one. This is a load balancing measure that is almost certainly
+# not needed, but this package implements that feature if it is desired.
 [[service]]
 bind = "127.0.0.1:11001"
 type = "data"

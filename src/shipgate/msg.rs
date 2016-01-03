@@ -69,17 +69,19 @@ macro_rules! impl_shipgate_message_enum {
                     msg_type = try!(hdr_cursor.read_u16::<BE>());
                     response_key = try!(hdr_cursor.read_u32::<BE>());
                 }
-                debug!("size: {}, type: {}, response_key: {}", size, msg_type, response_key);
+                debug!("Shipgate header: size: {}, type: {}, response_key: {}", size, msg_type, response_key);
 
                 let mut msg_buf = vec![0; size as usize - 8];
                 try!(read_exact(src, &mut msg_buf));
                 let mut msg_cur = Cursor::new(msg_buf);
-                match msg_type {
+                let res = match msg_type {
                     $($id => Ok(Message::$name(response_key, try!($name::deserialize(&mut msg_cur)))),)*
                     a => {
                         Ok(Message::Unknown(a, response_key, msg_cur.into_inner()))
                     }
-                }
+                };
+                debug!("Shipgate message parsed: {:?}", res);
+                res
             }
         }
 
