@@ -2,6 +2,7 @@
 
 use std::io;
 use std::io::{Read, Write};
+use std::net::{SocketAddrV4, Ipv4Addr};
 
 use psoserial::Serial;
 use psomsg_common::util::*;
@@ -138,7 +139,13 @@ impl_shipgate_message_enum! {
     0 => Auth,
     1 => AuthAck,
     2 => BbLoginChallenge,
-    3 => BbLoginChallengeAck
+    3 => BbLoginChallengeAck,
+    4 => BbGetAccountInfo,
+    5 => BbGetAccountInfoAck,
+    6 => RegisterShip,
+    7 => RegisterShipAck,
+    8 => ShipList,
+    9 => ShipListAck
 }
 
 #[derive(Clone, Debug)]
@@ -187,14 +194,70 @@ derive_serial! {
 }
 
 derive_serial! {
-    BbGetGuildCardNum {
+    BbGetAccountInfo {
         pub account_id: u32
     }
 }
 
 derive_serial! {
-    BbGetGuildCardNumAck {
+    BbGetAccountInfoAck {
+        pub status: u32,
         pub account_id: u32,
-        pub guildcard: u32
+        pub guildcard_num: u32,
+        pub team_id: u32
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RegisterShip(pub SocketAddrV4, pub String);
+impl Serial for RegisterShip {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        let ip = self.0.ip().octets();
+        let port = self.0.port();
+        try!(write_array(&ip, 4, dst));
+        try!(port.serialize(dst));
+        try!(write_utf16(&self.1, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let ip_octets = try!(read_array(4, src));
+        let port = try!(u16::deserialize(src));
+        let socketaddr = SocketAddrV4::new(Ipv4Addr::new(ip_octets[0], ip_octets[1], ip_octets[2], ip_octets[3]), port);
+        let name = try!(read_utf16(src));
+        Ok(RegisterShip(socketaddr, name))
+    }
+}
+
+derive_serial!(RegisterShipAck);
+
+derive_serial!(ShipList);
+
+#[derive(Clone, Debug)]
+pub struct ShipListAck(pub Vec<(SocketAddrV4, String)>);
+impl Serial for ShipListAck {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!((self.0.len() as u32).serialize(dst));
+        for &(ref s, ref n) in self.0.iter() {
+            let ip = s.ip().octets();
+            let port = s.port();
+            try!(write_array(&ip, 4, dst));
+            try!(port.serialize(dst));
+            try!(write_utf16(n, dst));
+        }
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let len = try!(u32::deserialize(src));
+        let mut ships = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            let ip_octets = try!(read_array(4, src));
+            let port = try!(u16::deserialize(src));
+            let socketaddr = SocketAddrV4::new(Ipv4Addr::new(ip_octets[0], ip_octets[1], ip_octets[2], ip_octets[3]), port);
+            let name = try!(read_utf16(src));
+            ships.push((socketaddr, name));
+        }
+        Ok(ShipListAck(ships))
     }
 }

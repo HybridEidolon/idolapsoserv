@@ -35,6 +35,10 @@ pub enum ServiceConf {
         // In this implementation, the ship servers act as a character server
         // for BB.
     },
+    Ship {
+        bind: SocketAddr,
+        name: String
+    },
     ShipGate {
         bind: SocketAddr,
         password: String,
@@ -169,6 +173,18 @@ impl ServiceConf {
                         Ok(ServiceConf::Login {
                             bind: bind,
                             version: version
+                        })
+                    },
+                    "ship" => {
+                        let name;
+                        match t.get("name")
+                            .and_then(|v| v.as_str()) {
+                            Some(v) => name = v.to_string(),
+                            None => return Err("No ship name specified".to_string())
+                        }
+                        Ok(ServiceConf::Ship {
+                            bind: bind,
+                            name: name
                         })
                     },
                     "shipgate" => {

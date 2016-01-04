@@ -45,6 +45,7 @@ use ::patch::PatchService;
 use ::data::DataService;
 use ::login::bb::BbLoginService;
 use ::shipgate::client::ShipGateClient;
+use ::ship::ShipService;
 use ::shipgate::ShipGateService;
 use ::services::Service;
 use ::config::Config;
@@ -120,6 +121,10 @@ fn main() {
                     },
                     _ => unimplemented!()
                 }
+            },
+            &ServiceConf::Ship { ref bind, ref name, .. } => {
+                println!("Ship service at {:?}", bind);
+                services.push(ShipService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, name));
             },
             &ServiceConf::ShipGate { .. } => {
                 match sg {

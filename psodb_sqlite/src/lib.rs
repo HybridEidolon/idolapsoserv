@@ -9,6 +9,7 @@ use psodb_common::Backend;
 use psodb_common::error::Error;
 
 use psodb_common::account::Account;
+use psodb_common::account::BbAccountInfo;
 
 mod schema;
 use self::schema::SCHEMA;
@@ -147,7 +148,44 @@ impl Backend for Sqlite {
     }
 
     fn reset_account_passwords(&self) -> Result<()> {
-        try_db!(self.conn.execute("UPDATE accounts (password_invalidated) VALUES (1)", &[]));
+        try_db!(self.conn.execute("UPDATE accounts SET password_invalidated=1", &[]));
+        Ok(())
+    }
+
+    fn fetch_bb_account_info(&self, account_id: u32) -> Result<Option<BbAccountInfo>> {
+        let mut stmt = try_db!(self.conn.prepare(
+            "SELECT id,team_id FROM bb_guildcard WHERE account_id=? LIMIT 1"
+        ));
+
+        let mut results = try_db!(stmt.query_map(&[&(account_id as i64)], |row| {
+            BbAccountInfo {
+                account_id: account_id,
+                guildcard_num: row.get::<i64>(0) as u32,
+                team_id: row.get::<i64>(1) as u32
+            }
+        }));
+
+        match results.next() {
+            Some(Ok(a)) => Ok(Some(a)),
+            Some(Err(e)) => Err(Error::BackendError(Some(Box::new(e)))),
+            None => {
+                // create defaults and push them to the database
+                let mut a = BbAccountInfo::new();
+                a.account_id = account_id;
+                match self.put_bb_account_info(&a) {
+                    Ok(_) => Ok(Some(a)),
+                    Err(e) => Err(e)
+                }
+            }
+        }
+    }
+
+    fn put_bb_account_info(&self, info: &BbAccountInfo) -> Result<()> {
+        let id = info.account_id as i64;
+        let gcnum = info.guildcard_num as i64;
+        let team = info.team_id as i64;
+        let mut stmt = try_db!(self.conn.prepare("INSERT OR REPLACE INTO bb_guildcard (id,account_id,team_id) VALUES (?,?,?)"));
+        try_db!(stmt.execute(&[&id, &gcnum, &team]));
         Ok(())
     }
 }

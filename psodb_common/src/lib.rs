@@ -2,6 +2,7 @@
 
 #[macro_use] extern crate log;
 extern crate crypto;
+extern crate rand;
 
 pub mod error;
 pub mod pool;
@@ -10,6 +11,7 @@ pub mod account;
 
 pub use self::error::Error;
 pub use self::account::Account;
+pub use self::account::BbAccountInfo;
 pub use self::pool::Pool;
 
 use std::result;
@@ -37,4 +39,10 @@ pub trait Backend {
 
     /// Reset or invalidate the passwords of every account.
     fn reset_account_passwords(&self) -> Result<()>;
+
+    /// Get BB account information by account ID. If the BB account information doesn't exist,
+    /// this should initialize the values to reasonable defaults.
+    fn fetch_bb_account_info(&self, account_id: u32) -> Result<Option<BbAccountInfo>>;
+
+    fn put_bb_account_info(&self, info: &BbAccountInfo) -> Result<()>;
 }

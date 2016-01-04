@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use psodb_common::pool::Pool;
 use psodb_common::account::Account;
+use psodb_common::account::BbAccountInfo;
 
 use ::shipgate::msg::*;
 use super::ClientCtx;
@@ -57,5 +58,41 @@ impl<'a> MsgHandler<'a> {
         }
 
         BbLoginChallengeAck { status: 0, account_id: account.id().unwrap() }.into()
+    }
+
+    pub fn handle_get_bb_account_info(&mut self, m: BbGetAccountInfo) -> Message {
+        let BbGetAccountInfo { account_id } = m;
+
+        let a = match self.pool.get_connection() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("Database error locking connection handle: {:?}", e);
+                return BbGetAccountInfoAck { status: 1, account_id: account_id, guildcard_num: 0, team_id: 0 }.into()
+            }
+        };
+
+        let handle = match a.lock() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("Database error locking connection handle: {:?}", e);
+                return BbGetAccountInfoAck { status: 2, account_id: account_id, guildcard_num: 0, team_id: 0 }.into()
+            }
+        };
+
+        let info: BbAccountInfo = match handle.fetch_bb_account_info(account_id) {
+            Ok(Some(a)) => a,
+            Ok(None) => unreachable!(),
+            Err(e) => {
+                error!("Database error getting Bb account info: {:?}", e);
+                return BbGetAccountInfoAck { status: 3, account_id: account_id, guildcard_num: 0, team_id: 0 }.into()
+            }
+        };
+
+        BbGetAccountInfoAck {
+            status: 0,
+            account_id: info.account_id,
+            guildcard_num: info.guildcard_num,
+            team_id: info.team_id
+        }.into()
     }
 }

@@ -4,7 +4,7 @@ use ::loop_handler::LoopMsg;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::thread;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, SocketAddrV4};
 
 use mio::tcp::TcpListener;
 use mio::Sender;
@@ -22,6 +22,8 @@ use ::shipgate::client::SgSender;
 use ::shipgate::client::callbacks::SgCbMgr;
 use ::shipgate::msg::{BbLoginChallenge,
     BbLoginChallengeAck,
+    ShipList as SgShipList,
+    ShipListAck,
     Message as Sgm};
 
 
@@ -71,12 +73,20 @@ impl BbLoginHandler {
             });
             self.sender.send((self.client_id, r).into()).unwrap();
             if status == 0 {
-                info!("User logged in successfully, redirecting to a ship.");
-                let r = Message::Redirect(0, Redirect {
-                    ip: "127.0.0.1".parse().unwrap(),
-                    port: 12001
-                });
-                self.sender.send((self.client_id, r).into()).unwrap();
+                // we need a ship from the ship list.
+                let sgm: Sgm = SgShipList.into();
+                self.sg_sender.request(self.client_id, sgm, move|h, m| {
+                    if let Sgm::ShipListAck(_, ShipListAck(ships)) = m {
+                        info!("User logged in successfully, redirecting to a ship.");
+                        // just redirect to first ship
+                        let ref ship: (SocketAddrV4, String) = ships[random::<usize>() % ships.len()];
+                        let r = Message::Redirect(0, Redirect {
+                            ip: ship.0.ip().clone(),
+                            port: ship.0.port()
+                        });
+                        h.sender.send((h.client_id, r).into()).unwrap();
+                    }
+                }).unwrap();
             }
         }
     }

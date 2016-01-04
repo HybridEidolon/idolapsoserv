@@ -3,6 +3,8 @@
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 
+use rand::random;
+
 /// A struct representing a Blue Burst user's account.
 pub struct Account {
     pub id: Option<u32>,
@@ -47,6 +49,30 @@ impl Account {
     pub fn cmp_password(&self, pw: &str, salt: &str) -> bool {
         let hashed = hash_password(&self.username, pw, salt);
         hashed == self.password_hash
+    }
+}
+
+/// Extended account information for Blue Burst.
+pub struct BbAccountInfo {
+    pub account_id: u32,
+    pub guildcard_num: u32,
+    pub team_id: u32
+}
+
+impl BbAccountInfo {
+    pub fn new() -> BbAccountInfo {
+        let bbgc = (random::<u32>() % 100000000) + 400000000;
+        BbAccountInfo {
+            account_id: 0,
+            guildcard_num: bbgc,
+            team_id: 0
+        }
+    }
+}
+
+impl Default for BbAccountInfo {
+    fn default() -> BbAccountInfo {
+        BbAccountInfo::new()
     }
 }
 

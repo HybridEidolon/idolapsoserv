@@ -7,3 +7,4 @@ authors = ["Eidolon"]
 log = "0.3"
 rusqlite = "0.5"
 rust-crypto = "0.2"
+rand = "0.3"

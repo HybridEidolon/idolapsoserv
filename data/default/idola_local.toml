@@ -71,6 +71,14 @@ type = "login"
 # The only currently supported version is BlueBurst.
 version = "BlueBurst"
 
+## Ship ##
+# The ship is where all gameplay occurs. In Blue Burst, character information
+# is also served from the ship i.e. all ships are character servers.
+[[service]]
+bind = "127.0.0.1:13000"
+type = "ship"
+name = "IDOLA"
+
 ## Shipgate ##
 # The shipgate is a special service. Rather than clients connecting to it, the
 # shipgate is unique to a PSO network and manages inter-ship comms and database

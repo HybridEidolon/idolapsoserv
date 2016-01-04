@@ -1,316 +1,135 @@
-//! Ship and block server.
+//! Ship service runner.
 
-use std::sync::mpsc;
-use std::sync::mpsc::{Sender, Receiver};
-use std::sync::Arc;
-use std::net::{TcpListener, TcpStream};
+use ::services::{Service, ServiceMsg};
+use ::loop_handler::LoopMsg;
+
+use std::sync::mpsc::channel;
+use std::sync::mpsc::Receiver;
 use std::thread;
+use std::net::SocketAddr;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::collections::HashMap;
+use std::cell::RefCell;
 
-use psodb_common::Pool;
+use mio::tcp::TcpListener;
+use mio::Sender;
 
-use psocrypto::{EncryptWriter, DecryptReader};
-use psocrypto::bb::BbCipher;
+use rand::random;
 
-mod error;
+use psomsg::bb::*;
 
-pub use self::error::{Result, Error, ErrorKind};
+use ::services::message::NetMsg;
 
-/// Messages bound for the central Ship.
-enum ShipMsg {
-    NewClient(TcpStream),
-    DelClient,
-    AcceptorClosing
+use ::services::ServiceType;
+
+use ::shipgate::client::SgSender;
+use ::shipgate::client::callbacks::SgCbMgr;
+use ::shipgate::msg::RegisterShip;
+
+pub mod handler;
+pub mod client;
+
+use self::handler::ShipHandler;
+
+use self::client::ClientState;
+
+pub struct ShipService {
+    receiver: Receiver<ServiceMsg>,
+    sender: Sender<LoopMsg>,
+    sg_sender: SgCbMgr<ShipHandler>,
+    clients: Rc<RefCell<HashMap<usize, ClientState>>>,
+    name: String
 }
 
-/// Messages bound for the Client.
-enum ClientMsg {
-    LargeMsg(String),
-    //JoinBlockLobby(u8, u8),
-    AbruptDisconnect
-}
+impl ShipService {
+    pub fn spawn(bind: &SocketAddr,
+                 sender: Sender<LoopMsg>,
+                 key_table: Arc<Vec<u32>>,
+                 sg_sender: &SgSender,
+                 name: &str) -> Service {
+        let (tx, rx) = channel();
 
-pub struct ShipServer {
-    running: bool,
-    clients: Vec<Arc<Client>>,
-    bind: String,
-    db_pool: Arc<Pool>,
-    key_table: Arc<Vec<u32>>
-}
+        let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
 
-pub struct Client {
-    tx: Sender<ClientMsg>
-}
+        let sg_sender = sg_sender.clone_with(tx.clone());
 
-impl ShipServer {
-    pub fn new(bind: &str, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool>) -> Self {
-        ShipServer {
-            running: true,
-            clients: Vec::new(),
-            bind: bind.to_owned(),
-            db_pool: db_pool,
-            key_table: key_table
-        }
+        let name = name.to_string();
+
+        thread::spawn(move|| {
+            let d = ShipService {
+                receiver: rx,
+                sender: sender,
+                sg_sender: sg_sender.into(),
+                clients: Default::default(),
+                name: name
+            };
+            d.run();
+        });
+
+        // TODO this isn't going to work for accepting connections from any version
+        Service::new(listener, tx, ServiceType::Bb(key_table))
     }
 
-    pub fn run(self) -> Result<()> {
-        let ShipServer {
-            mut running,
-            mut clients,
-            bind,
-            db_pool,
-            key_table
-        } = self;
-        // Set up the comms channel for all connections.
+    fn make_handler(&mut self, client_id: usize) -> ShipHandler {
+        ShipHandler::new(
+            self.sender.clone(),
+            self.sg_sender.clone(),
+            client_id,
+            self.clients.clone()
+        )
+    }
 
-        let (tx, rx) = mpsc::channel();
+    pub fn run(mut self) {
+        info!("Ship service running.");
 
-        // Open a thread that accepts connections for us and adds to the client list, and a copy
-        // of the transmitter to it.
-        {
-            let bind_c = bind.clone();
-            let tx_c = tx.clone();
-            thread::spawn(move|| client_acceptor(&bind_c, tx_c));
-        }
+        self.sg_sender.send(RegisterShip("127.0.0.1:13000".parse().unwrap(), self.name.clone())).unwrap();
 
-        while running {
-            use self::ShipMsg::*;
+        loop {
+            let msg = match self.receiver.recv() {
+                Ok(m) => m,
+                Err(_) => return
+            };
 
-            let msg = rx.recv().unwrap();
             match msg {
-                NewClient(mut s) => {
-                    let peer_addr = match s.peer_addr() {
-                        Err(_) => {error!("Failed to get peer address. Wow, I'm surprised we failed this early."); continue},
-                        Ok(p) => p
-                    };
-                    match handle_newclient(&mut s, key_table.clone(), db_pool.clone(), tx.clone()) {
-                        Err(e) => warn!("[{}] client failed to connect: {}", peer_addr, e),
-                        Ok(c_tx) => {
-                            let client = Client {
-                                tx: c_tx
-                            };
-                            clients.push(Arc::new(client));
+                ServiceMsg::ClientConnected(id) => {
+                    info!("Client {} connected to ship {}", id, self.name);
+                    let sk = vec![random(); 48];
+                    let ck = vec![random(); 48];
+                    self.sender.send((id, Message::BbWelcome(0, BbWelcome(sk, ck))).into()).unwrap();
+
+                    // Add to clients table
+                    let cs = ClientState::default();
+                    {self.clients.borrow_mut().insert(id, cs);}
+                },
+                ServiceMsg::ClientDisconnected(id) => {
+                    info!("Client {} disconnected from ship {}", id, self.name);
+                    {self.clients.borrow_mut().remove(&id);}
+                },
+                ServiceMsg::ClientSaid(id, NetMsg::Bb(m)) => {
+                    let mut h = self.make_handler(id);
+                    match m {
+                        Message::BbLogin(_, m) => { h.bb_login(m) },
+                        a => {
+                            info!("{:?}", a)
                         }
                     }
                 },
-                DelClient => {
-                    info!("A client disconnected.");
-                }
-                AcceptorClosing => {
-                    running = false;
-                    for c in clients.iter() {
-                        if let Err(_) = c.tx.send(ClientMsg::LargeMsg("Server is going offline due to client acceptor thread dying.".to_string())) {
-                            continue
-                        }
-                        if let Err(_) = c.tx.send(ClientMsg::AbruptDisconnect) {
-                            continue
-                        }
+                ServiceMsg::ShipGateMsg(m) => {
+                    let req = m.get_response_key();
+                    info!("Shipgate Request {}: Response received", req);
+                    let cb;
+                    {
+                        cb = self.sg_sender.cb_for_req(req)
                     }
-                    continue
+
+                    match cb {
+                        Some((client, mut c)) => c(self.make_handler(client), m),
+                        None => warn!("Got a SG request response for an unexpected request ID {}.", req)
+                    }
                 }
+                _ => unreachable!()
             }
         }
-
-        Ok(())
     }
-}
-
-fn client_acceptor(bind: &str, tx: Sender<ShipMsg>) {
-    let tcp_listener = TcpListener::bind(bind).unwrap();
-
-    for s in tcp_listener.incoming() {
-        use self::ShipMsg::*;
-        match s {
-            Ok(stream) => match tx.send(ShipMsg::NewClient(stream)) {
-                Err(_) => {tx.send(AcceptorClosing).unwrap(); return},
-                _ => ()
-            },
-            _ => break
-        }
-    }
-
-    tx.send(ShipMsg::AcceptorClosing).unwrap();
-}
-
-fn client_thread(mut w: EncryptWriter<TcpStream, BbCipher>, mut r: DecryptReader<TcpStream, BbCipher>, _rx: Receiver<ClientMsg>, tx: Sender<ShipMsg>) {
-    use psomsg::bb::*;
-    use psomsg::Serial;
-    use std::fs::File;
-    use ::game::CharClass;
-
-    let mut fc;
-
-    info!("client connected to the ship server");
-
-    {
-        {
-            let mut ll: Vec<(u32, u32)> = Vec::new();
-            ll.push((60, 1));
-            ll.push((60, 2));
-            ll.push((60, 3));
-            ll.push((60, 4));
-            ll.push((60, 5));
-            ll.push((60, 6));
-            ll.push((60, 7));
-            ll.push((60, 8));
-            ll.push((60, 9));
-            ll.push((60, 10));
-            ll.push((60, 11));
-            ll.push((60, 12));
-            ll.push((60, 13));
-            ll.push((60, 14));
-            ll.push((60, 15));
-            ll.push((0, 0));
-            Message::LobbyList(16, LobbyList { items: ll }).serialize(&mut w).unwrap();
-        }
-        fc = ::util::nsc::read_nsc(&mut File::open("data/default/default_0.nsc").unwrap(), CharClass::HUmar).unwrap();
-        fc.name = "\tEguaco".to_string();
-        fc.chara.name = "\tEguaco".to_string();
-        fc.guildcard = 1000000;
-        fc.key_config.guildcard = 1000000;
-        fc.chara.level = 30;
-        fc.chara.hp = 400;
-        Message::BbFullChar(0, BbFullChar(fc.clone())).serialize(&mut w).unwrap();
-        Message::CharDataRequest(0, CharDataRequest).serialize(&mut w).unwrap();
-    }
-
-    loop {
-        //use self::ClientMsg::*;
-        let msg = Message::deserialize(&mut r);
-        if let Err(_) = msg {
-            if let Err(_) = tx.send(ShipMsg::DelClient) {
-                error!("apparently the whole ship died...");
-            }
-            return
-        } else if let Ok(msg) = msg { match msg {
-            Message::BbCharDat(_, BbCharDat(data)) => {
-                info!("{}", data.chara.name);
-                let mut l = LobbyJoin::default();
-                l.client_id = 0;
-                l.leader_id = 0;
-                l.one = 1;
-                l.lobby_num = 0;
-                l.block_num = 1;
-                l.event = 0;
-                let mut lm = LobbyMember::default();
-                lm.hdr.guildcard = 1000000;
-                lm.hdr.tag = 0x00010000;
-                lm.hdr.client_id = 0;
-                lm.hdr.name = fc.name.clone();
-                lm.data = fc.chara.clone();
-                // lm.data.name = fc.chara.name.clone();
-                // lm.data.name_color = 0xFFFFFFFF;
-                // lm.data.section = 1;
-                // lm.data.class = 1;
-                // lm.data.level = 30;
-                // lm.data.version = 3;
-                // lm.data.v1flags = 25;
-                // lm.data.hp = 400;
-                // lm.data.model = 0;
-                // lm.data.skin = 1;
-                // lm.data.face = 1;
-                // lm.data.head = 1;
-                // lm.data.hair = 1;
-                // lm.data.prop_x = 1.0;
-                // lm.data.prop_y = 1.0;
-                l.members.push(lm);
-                //Message::LobbyArrowList(0, LobbyArrowList(Vec::new())).serialize(&mut w).unwrap();
-                Message::LobbyJoin(1, l).serialize(&mut w).unwrap();
-            }
-            a => info!("block client recv msg {:?}", a)
-        }}
-    }
-}
-
-/// Spawn a new client thread that receives messages and channels them to the ship server for
-/// further handling.
-fn handle_newclient(stream: &mut TcpStream, key_table: Arc<Vec<u32>>, db_pool: Arc<Pool>, tx: Sender<ShipMsg>) -> Result<Sender<ClientMsg>> {
-    use psomsg::bb::*;
-    use psomsg::Serial;
-    use rand::random;
-    use psodb_common::Account;
-
-    // Generate our crypto.
-    let s_key = vec![random::<u8>(); 48];
-    let c_key = vec![random::<u8>(); 48];
-    let s_cipher = BbCipher::new(&s_key, &key_table);
-    let c_cipher = BbCipher::new(&c_key, &key_table);
-
-    // Send the welcome
-    try!(Message::BbWelcome(0, BbWelcome(s_key, c_key)).serialize(stream));
-
-    // Set up crypto streams
-    let mut w_s = EncryptWriter::new(try!(stream.try_clone()), s_cipher);
-    let mut r_s = DecryptReader::new(try!(stream.try_clone()), c_cipher);
-
-    // Wait for login
-    match Message::deserialize(&mut r_s) {
-        Ok(Message::BbLogin(0, BbLogin { username, password, security_data, .. })) => {
-            // Verify credentials with database
-            let conn = match db_pool.get_connection() {
-                Ok(c) => c,
-                Err(e) => return Err(Error::new(ErrorKind::DbError, e))
-            };
-
-            let account: Account;
-            {
-                let db = match conn.lock() {
-                    Ok(d) => d,
-                    Err(_e) => return Err(Error::new(ErrorKind::DbError, "Poisoned connection lock!"))
-                };
-
-                account = match db.get_account_by_username(&username) {
-                    Ok(None) => return Err(Error::new(ErrorKind::CredentialError, format!("User with name {} doesn't exist.", username))),
-                    Ok(Some(a)) => a,
-                    Err(e) => return Err(Error::new(ErrorKind::DbError, e))
-                };
-            }
-
-            if !account.cmp_password(&password, "") {
-                if let Err(_e) = Message::BbSecurity(0, BbSecurity {
-                    err_code: 4,
-                    tag: 0,
-                    guildcard: 0,
-                    team_id: 0,
-                    security_data: security_data,
-                    caps: 0
-                }).serialize(&mut w_s) {
-                    // do nothing, we're gonna drop them anyway
-                }
-                return Err(Error::new(ErrorKind::CredentialError, "Incorrect password."))
-            }
-
-            if account.banned {
-                if let Err(_e) = Message::BbSecurity(0, BbSecurity {
-                    err_code: 7,
-                    tag: 0,
-                    guildcard: 0,
-                    team_id: 0,
-                    security_data: security_data,
-                    caps: 0
-                }).serialize(&mut w_s) {
-                    // do nothing, we're gonna drop them anyway
-                }
-                return Err(Error::new(ErrorKind::CredentialError, "User is banned."))
-            }
-            if let Err(e) = Message::BbSecurity(0, BbSecurity {
-                err_code: 0,
-                tag: 0x00010000,
-                guildcard: 1000000,
-                team_id: 1,
-                security_data: security_data,
-                caps: 0x00000102
-            }).serialize(&mut w_s) {
-                return Err(Error::new(ErrorKind::IoError, e))
-            }
-        },
-        Ok(_) => return Err(Error::new(ErrorKind::UnexpectedMsg, "User was expected to BbLogin but did not.")),
-        Err(e) => return Err(Error::new(ErrorKind::IoError, e))
-    }
-
-    // New transmission channel between client handler thread and the ship/block server.
-    let (tx_c, rx) = mpsc::channel();
-
-    thread::spawn(move|| client_thread(w_s, r_s, rx, tx));
-
-    Ok(tx_c)
 }

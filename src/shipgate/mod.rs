@@ -7,7 +7,7 @@
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::thread;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, SocketAddrV4};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -33,7 +33,8 @@ pub struct ShipGateService {
     sender: Sender<LoopMsg>,
     password: String,
     clients: HashMap<usize, ClientCtx>,
-    pool: Arc<Pool>
+    pool: Arc<Pool>,
+    ships: HashMap<usize, (SocketAddrV4, String)>
 }
 
 
@@ -65,7 +66,8 @@ impl ShipGateService {
                 sender: sender,
                 password: pw,
                 clients: Default::default(),
-                pool: pool
+                pool: pool,
+                ships: Default::default()
             };
             p.run()
         });
@@ -105,6 +107,19 @@ impl ShipGateService {
                             Message::BbLoginChallenge(req, body) => {
                                 (req, handler.handle_login_challenge(body).into())
                             },
+                            Message::BbGetAccountInfo(req, body) => {
+                                (req, handler.handle_get_bb_account_info(body).into())
+                            },
+                            Message::RegisterShip(req, body) => {
+                                // Register the ship.
+                                info!("Ship {} at {:?} registered", body.1, body.0);
+                                self.ships.insert(id, (body.0, body.1));
+                                (req, RegisterShipAck.into())
+                            },
+                            Message::ShipList(req, _) => {
+                                let ships: Vec<_> = self.ships.values().map(|v| v.clone()).collect();
+                                (req, ShipListAck(ships).into())
+                            }
                             _ => unimplemented!()
                         };
                         info!("Client Request {} received from client {}", req, id);
