@@ -9,6 +9,7 @@ use mio::Sender;
 
 use psomsg::bb::*;
 
+use ::config::BlockConf;
 use ::shipgate::client::callbacks::SgCbMgr;
 use ::shipgate::msg::{BbLoginChallenge,
     //BbLoginChallengeAck,
@@ -24,17 +25,19 @@ pub struct ShipHandler {
     sg_sender: SgCbMgr<ShipHandler>,
     client_id: usize,
     clients: Rc<RefCell<HashMap<usize, ClientState>>>,
-    param_data: Rc<(Message, Vec<Message>)>
+    param_data: Rc<(Message, Vec<Message>)>,
+    blocks: Rc<Vec<BlockConf>>
 }
 
 impl ShipHandler {
-    pub fn new(sender: Sender<LoopMsg>, sg_sender: SgCbMgr<ShipHandler>, client_id: usize, clients: Rc<RefCell<HashMap<usize, ClientState>>>, param_data: Rc<(Message, Vec<Message>)>) -> ShipHandler {
+    pub fn new(sender: Sender<LoopMsg>, sg_sender: SgCbMgr<ShipHandler>, client_id: usize, clients: Rc<RefCell<HashMap<usize, ClientState>>>, param_data: Rc<(Message, Vec<Message>)>, blocks: Rc<Vec<BlockConf>>) -> ShipHandler {
         ShipHandler {
             sender: sender,
             sg_sender: sg_sender,
             client_id: client_id,
             clients: clients,
-            param_data: param_data
+            param_data: param_data,
+            blocks: blocks
         }
     }
 
@@ -42,6 +45,7 @@ impl ShipHandler {
         let sec_data = m.security_data.clone();
         // Security data should be set when connecting to the Ship (sent by Login)
         // Drop if it's invalid.
+        info!("Logging in user has security: {:?}", sec_data);
         if sec_data.magic != 0xCAFEB00B {
             let m = Message::LargeMsg(0, LargeMsg("Invalid security data".to_string()));
             self.sender.send((self.client_id, m).into()).unwrap();
@@ -68,20 +72,12 @@ impl ShipHandler {
                     return
                 }
 
-                let sec_data = sec_data.clone();
+                let mut sec_data = sec_data.clone();
 
                 let sgm: Sgm = BbGetAccountInfo { account_id: a.account_id }.into();
                 h.sg_sender.request(h.client_id, sgm, move|mut h, m| {
                     if let Sgm::BbGetAccountInfoAck(_, a) = m {
-                        let r = Message::BbSecurity(0, BbSecurity {
-                            err_code: 0,
-                            tag: 0x00010000,
-                            guildcard: a.guildcard_num,
-                            team_id: a.team_id,
-                            security_data: sec_data,
-                            caps: 0x00000102
-                        });
-                        h.sender.send((h.client_id, r).into()).unwrap();
+                        let had_ship_sel = sec_data.sel_ship;
 
                         {
                             let mut b = h.clients.borrow_mut();
@@ -92,8 +88,19 @@ impl ShipHandler {
                         }
 
                         // If they have selected their character, we are at ship select.
-                        if sec_data.sel_char {
-                            info!("Sending timestamp to {}", h.client_id);
+                        if sec_data.sel_char && !had_ship_sel {
+                            // once they reconnect again, they'll be at block select.
+                            sec_data.sel_ship = true;
+                            let r = Message::BbSecurity(0, BbSecurity {
+                                err_code: 0,
+                                tag: 0x00010000,
+                                guildcard: a.guildcard_num,
+                                team_id: a.team_id,
+                                security_data: sec_data,
+                                caps: 0x00000102
+                            });
+                            h.sender.send((h.client_id, r).into()).unwrap();
+
                             let r = Message::Timestamp(0, Timestamp {
                                 year: 2016,
                                 month: 1,
@@ -106,6 +113,61 @@ impl ShipHandler {
                             h.sender.send((h.client_id, r).into()).unwrap();
                             let sgm: Sgm = SgShipList.into();
                             h.sg_sender.request(h.client_id, sgm, move|mut h, m| h.sg_shiplist(m)).unwrap();
+                        } else if sec_data.sel_char && had_ship_sel {
+                            let r = Message::BbSecurity(0, BbSecurity {
+                                err_code: 0,
+                                tag: 0x00010000,
+                                guildcard: a.guildcard_num,
+                                team_id: a.team_id,
+                                security_data: sec_data,
+                                caps: 0x00000102
+                            });
+                            h.sender.send((h.client_id, r).into()).unwrap();
+
+                            let r = Message::Timestamp(0, Timestamp {
+                                year: 2016,
+                                month: 1,
+                                day: 1,
+                                hour: 0,
+                                minute: 30,
+                                second: 30,
+                                msec: 0
+                            });
+                            h.sender.send((h.client_id, r).into()).unwrap();
+
+                            // send blocklist
+                            info!("Sending blocklist to {}", h.client_id);
+                            let mut blist = Vec::new();
+                            blist.push(ShipListItem {
+                                menu_id: 1,
+                                item_id: 0,
+                                flags: 0x0000,
+                                name: "".to_string()
+                            });
+                            let mut i = 1;
+                            for b in h.blocks.iter() {
+                                blist.push(ShipListItem {
+                                    menu_id: 1,
+                                    item_id: i,
+                                    flags: 0x0F04,
+                                    name: b.name.clone()
+                                });
+                                i += 1;
+                            }
+                            let r = Message::BlockList(blist.len() as u32 - 1, BlockList(blist));
+                            h.sender.send((h.client_id, r).into()).unwrap();
+                        } else {
+                            // They haven't selected a character; all they need is the
+                            // security packet.
+                            let r = Message::BbSecurity(0, BbSecurity {
+                                err_code: 0,
+                                tag: 0x00010000,
+                                guildcard: a.guildcard_num,
+                                team_id: a.team_id,
+                                security_data: sec_data,
+                                caps: 0x00000102
+                            });
+                            h.sender.send((h.client_id, r).into()).unwrap();
                         }
                         return
                     }
@@ -122,6 +184,11 @@ impl ShipHandler {
         info!("Sending ship list to {}", self.client_id);
         if let Sgm::ShipListAck(_, ShipListAck(ships)) = m {
             let ships: Vec<(SocketAddrV4, String)> = ships;
+            {
+                let mut b = self.clients.borrow_mut();
+                let mut c = b.get_mut(&self.client_id).unwrap();
+                c.ships = Some(ships.clone());
+            }
             let mut shiplist: Vec<ShipListItem> = Vec::new();
             shiplist.push(ShipListItem {
                 menu_id: 0,
@@ -247,5 +314,53 @@ impl ShipHandler {
 
         let r = Message::BbCharAck(0, BbCharAck {slot: slot, code: 0});
         self.sender.send((self.client_id, r).into()).unwrap();
+    }
+
+    pub fn menu_select(&mut self, m: MenuSelect) {
+        let MenuSelect(menu, item) = m;
+
+        match menu {
+            0 => {
+                info!("Client selected a ship; redirect");
+                let ships;
+                {
+                    let mut b = self.clients.borrow_mut();
+                    let c = b.get_mut(&self.client_id).unwrap();
+                    ships = c.ships.clone();
+                }
+
+                // Which ship did they select? item - 1 = idx
+                if let Some(shiplist) = ships {
+                    let ship = shiplist.get(item as usize - 1);
+                    if let Some(ship) = ship {
+                        let r = Message::Redirect(0, Redirect {
+                            ip: ship.0.ip().clone(),
+                            port: ship.0.port()
+                        });
+                        self.sender.send((self.client_id, r).into()).unwrap();
+                    } else {
+                        // invalid menu item
+                        self.sender.send(LoopMsg::DropClient(self.client_id)).unwrap();
+                    }
+                }
+            },
+            1 => {
+                info!("Client selected a block; redirect");
+
+                // Which block did they select? item - 1 = idx
+                let block = self.blocks.get(item as usize - 1);
+                if let Some(block) = block {
+                    let r = Message::Redirect(0, Redirect {
+                        ip: block.addr.ip().clone(),
+                        port: block.addr.port()
+                    });
+                    self.sender.send((self.client_id, r).into()).unwrap();
+                } else {
+                    // invalid menu item
+                    self.sender.send(LoopMsg::DropClient(self.client_id)).unwrap();
+                }
+            },
+            _ => return
+        }
     }
 }

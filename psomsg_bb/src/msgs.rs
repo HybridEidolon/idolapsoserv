@@ -505,7 +505,8 @@ pub struct BbSecurityData {
     // uint8_t reserved[34];               /* Set to 0 */
     pub magic: u32,
     pub slot: u8,
-    pub sel_char: bool
+    pub sel_char: bool,
+    pub sel_ship: bool
 }
 
 impl Serial for BbSecurityData {
@@ -513,7 +514,8 @@ impl Serial for BbSecurityData {
         try!(dst.write_u32::<LE>(self.magic));
         try!(dst.write_u8(self.slot));
         try!(dst.write_u8(if self.sel_char {1} else {0}));
-        try!(dst.write_all(&[0; 34][..]));
+        try!(dst.write_u8(if self.sel_ship {1} else {0}));
+        try!(dst.write_all(&[0; 33][..]));
         Ok(())
     }
 
@@ -521,11 +523,13 @@ impl Serial for BbSecurityData {
         let magic = try!(src.read_u32::<LE>());
         let slot = try!(src.read_u8());
         let sel_char = match try!(src.read_u8()) { 0 => false, _ => true };
-        try!(src.read(&mut [0; 34][..]));
+        let sel_ship = match try!(src.read_u8()) { 0 => false, _ => true };
+        try!(src.read(&mut [0; 33][..]));
         Ok(BbSecurityData {
             magic: magic,
             slot: slot,
-            sel_char: sel_char
+            sel_char: sel_char,
+            sel_ship: sel_ship
         })
     }
 }

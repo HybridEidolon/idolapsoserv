@@ -37,7 +37,11 @@ pub enum ServiceConf {
     },
     Ship {
         bind: SocketAddr,
-        name: String
+        name: String,
+        blocks: Vec<BlockConf>
+    },
+    Block {
+        bind: SocketAddr,
     },
     ShipGate {
         bind: SocketAddr,
@@ -52,6 +56,12 @@ pub enum DbConf {
     Sqlite {
         file: String
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct BlockConf {
+    pub name: String,
+    pub addr: SocketAddrV4
 }
 
 impl DbConf {
@@ -182,9 +192,32 @@ impl ServiceConf {
                             Some(v) => name = v.to_string(),
                             None => return Err("No ship name specified".to_string())
                         }
+                        let blocks = match t.get("block")
+                            .and_then(|v| v.as_slice()) {
+                            Some(v) => {
+                                let mut vec: Vec<BlockConf> = Vec::new();
+                                for b in v {
+                                    let block = match b.as_table().map(|v| BlockConf::from_toml_table(v)) {
+                                        Some(Ok(bl)) => bl,
+                                        Some(Err(e)) => return Err(e),
+                                        None => return Err("An element in the block slice is not a table".to_string())
+                                    };
+                                    vec.push(block);
+                                }
+                                vec
+                            },
+                            None => return Err("No blocks defined for ship".to_string())
+                        };
+
                         Ok(ServiceConf::Ship {
                             bind: bind,
-                            name: name
+                            name: name,
+                            blocks: blocks
+                        })
+                    },
+                    "block" => {
+                        Ok(ServiceConf::Block {
+                            bind: bind
                         })
                     },
                     "shipgate" => {
@@ -242,5 +275,23 @@ impl DbConf {
             Some(t) => { Err(format!("unsupported db type {}", t)) },
             None => { Err("shipgate db type not specified".to_string()) }
         }
+    }
+}
+
+impl BlockConf {
+    pub fn from_toml_table(t: &Table) -> Result<BlockConf, String> {
+        let name = match t.get("name").and_then(|v| v.as_str()) {
+            Some(n) => n.to_string(),
+            None => return Err("Block must be named in ship's block list".to_string())
+        };
+        let addr = match t.get("addr").and_then(|v| v.as_str()).map(|v| v.parse()) {
+            Some(Ok(a)) => a,
+            Some(Err(e)) => return Err(format!("Block address is invalid: {}", e)),
+            None => return Err("Block address not specified".to_string())
+        };
+        Ok(BlockConf {
+            name: name,
+            addr: addr
+        })
     }
 }

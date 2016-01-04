@@ -78,6 +78,23 @@ version = "BlueBurst"
 bind = "127.0.0.1:13000"
 type = "ship"
 name = "IDOLA"
+  [[service.block]]
+  # The name shown in the block list. It should probably corrospond to the
+  # index in this array.
+  name = "BLOCK01"
+  addr = "127.0.0.1:13001"
+
+  # [[service.block]]
+  # name = "BLOCK02"
+  # addr = "127.0.0.1:13002"
+
+## Block ##
+# Ships normally have 10 distinct "blocks" on which most gameplay actually
+# occurs, however PSO doesn't have any stringent requirement on this.
+# They can actually be named anything in the block select!
+[[service]]
+bind = "127.0.0.1:13001"
+type = "block"
 
 ## Shipgate ##
 # The shipgate is a special service. Rather than clients connecting to it, the

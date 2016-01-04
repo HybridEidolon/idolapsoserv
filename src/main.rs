@@ -26,6 +26,7 @@ pub mod game;
 pub mod login;
 pub mod bb;
 pub mod ship;
+pub mod block;
 pub mod shipgate;
 pub mod util;
 pub mod args;
@@ -46,6 +47,7 @@ use ::data::DataService;
 use ::login::bb::BbLoginService;
 use ::shipgate::client::ShipGateClient;
 use ::ship::ShipService;
+use ::block::BlockService;
 use ::shipgate::ShipGateService;
 use ::services::Service;
 use ::config::Config;
@@ -122,9 +124,13 @@ fn main() {
                     _ => unimplemented!()
                 }
             },
-            &ServiceConf::Ship { ref bind, ref name, .. } => {
+            &ServiceConf::Ship { ref bind, ref name, ref blocks, .. } => {
                 println!("Ship service at {:?}", bind);
-                services.push(ShipService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, name, &config.data_path));
+                services.push(ShipService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, name, &config.data_path, blocks.clone()));
+            },
+            &ServiceConf::Block { ref bind, .. } => {
+                println!("Block service at {:?}", bind);
+                services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone()));
             },
             &ServiceConf::ShipGate { .. } => {
                 match sg {
