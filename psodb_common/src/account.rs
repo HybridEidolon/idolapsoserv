@@ -65,7 +65,7 @@ impl BbAccountInfo {
         BbAccountInfo {
             account_id: 0,
             guildcard_num: bbgc,
-            team_id: 0
+            team_id: 1
         }
     }
 }

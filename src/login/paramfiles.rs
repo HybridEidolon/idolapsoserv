@@ -6,7 +6,7 @@ use psomsg::bb::*;
 
 use crc::crc32::checksum_ieee as crc32;
 
-pub fn load_paramfiles_msgs() -> io::Result<(Message, Vec<Message>)> {
+pub fn load_paramfiles_msgs(data_root: &str) -> io::Result<(Message, Vec<Message>)> {
     let paramfiles = [
         "ItemMagEdit.prs",
         "ItemPMT.prs",
@@ -20,7 +20,7 @@ pub fn load_paramfiles_msgs() -> io::Result<(Message, Vec<Message>)> {
     ];
 
     let mut param_file_data: Vec<io::Result<(String, Vec<u8>, u32)>> = paramfiles.iter().map(|filename| {
-        let mut f = try!(File::open("data/param/".to_string() + filename));
+        let mut f = try!(File::open(format!("{}/param/{}", data_root, filename)));
         let mut buf = Vec::new();
         try!(f.read_to_end(&mut buf));
         let checksum = crc32(&buf[..]);

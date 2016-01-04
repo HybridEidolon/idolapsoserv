@@ -20,8 +20,8 @@ use rand::random;
 use psomsg::bb::*;
 
 use ::services::message::NetMsg;
-
 use ::services::ServiceType;
+use ::login::paramfiles::load_paramfiles_msgs;
 
 use ::shipgate::client::SgSender;
 use ::shipgate::client::callbacks::SgCbMgr;
@@ -39,7 +39,8 @@ pub struct ShipService {
     sender: Sender<LoopMsg>,
     sg_sender: SgCbMgr<ShipHandler>,
     clients: Rc<RefCell<HashMap<usize, ClientState>>>,
-    name: String
+    name: String,
+    param_files: Rc<(Message, Vec<Message>)>
 }
 
 impl ShipService {
@@ -47,7 +48,8 @@ impl ShipService {
                  sender: Sender<LoopMsg>,
                  key_table: Arc<Vec<u32>>,
                  sg_sender: &SgSender,
-                 name: &str) -> Service {
+                 name: &str,
+                 data_path: &str) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -56,13 +58,17 @@ impl ShipService {
 
         let name = name.to_string();
 
+        // load param data
+        let params = load_paramfiles_msgs(data_path).expect("Couldn't load param files from data path");
+
         thread::spawn(move|| {
             let d = ShipService {
                 receiver: rx,
                 sender: sender,
                 sg_sender: sg_sender.into(),
                 clients: Default::default(),
-                name: name
+                name: name,
+                param_files: Rc::new(params)
             };
             d.run();
         });
@@ -76,7 +82,8 @@ impl ShipService {
             self.sender.clone(),
             self.sg_sender.clone(),
             client_id,
-            self.clients.clone()
+            self.clients.clone(),
+            self.param_files.clone()
         )
     }
 
@@ -110,6 +117,14 @@ impl ShipService {
                     let mut h = self.make_handler(id);
                     match m {
                         Message::BbLogin(_, m) => { h.bb_login(m) },
+                        Message::BbOptionRequest(_, _) => { h.bb_option_request() },
+                        Message::BbChecksum(_, m) => { h.bb_checksum(m) },
+                        Message::BbGuildRequest(_, _) => { h.bb_guildcard_req() },
+                        Message::BbGuildCardChunkReq(_, r) => { h.bb_guildcard_chunk_req(r) },
+                        Message::BbCharSelect(_, m) => { h.bb_char_select(m) },
+                        Message::BbParamHdrReq(_, _) => { h.bb_param_hdr_req() },
+                        Message::BbParamChunkReq(c, _) => { h.bb_param_chunk_req(c) },
+                        Message::BbCharInfo(_, m) => { h.bb_char_info(m) },
                         a => {
                             info!("{:?}", a)
                         }

@@ -124,7 +124,7 @@ fn main() {
             },
             &ServiceConf::Ship { ref bind, ref name, .. } => {
                 println!("Ship service at {:?}", bind);
-                services.push(ShipService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, name));
+                services.push(ShipService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, name, &config.data_path));
             },
             &ServiceConf::ShipGate { .. } => {
                 match sg {
