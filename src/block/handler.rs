@@ -114,14 +114,14 @@ impl BlockHandler {
                             fc = BbFullCharData::default();
                             // put a saber in their inventory and equip it
                             // fc.inv.item_count = 1;
-                            // fc.inv.items[0].equipped = 1;
-                            // fc.inv.items[0].flags = 0x44;
-                            // fc.inv.items[0].data.data[1] = 0x01;
-                            // fc.inv.items[0].data.item_id = 0x10010000;
+                            // fc.inv.items[0].exists = 1;
+                            // fc.inv.items[0].flags = 0x08;
+                            // fc.inv.items[0].data.data[1] = 0x06;
+                            // fc.inv.items[0].data.item_id = 0x00010000;
+
                             fc.name = "\tEguaco".to_string();
                             fc.chara.name = "\tEguaco".to_string();
                             fc.guildcard = a.guildcard_num;
-                            //fc.option_flags = 0x0000000;
                             fc.team_name = "\tEFUQBOI".to_string();
                             fc.key_config = Default::default();
                             fc.key_config.team_id = a.team_id;
@@ -146,7 +146,6 @@ impl BlockHandler {
                             fc.chara.prop_y = 0.3;
                             fc.autoreply = "".to_string();
                             fc.infoboard = "".to_string();
-                            fc.inv.lang = 1;
                             let r = Message::BbFullChar(0, BbFullChar(fc.clone()));
                             h.sender.send((h.client_id, r).into()).unwrap();
                             c.full_char = Some(fc);

@@ -8,14 +8,14 @@ use std::io::{Read, Write};
 
 #[derive(Clone, Debug)]
 pub struct InvItem {
-    pub equipped: u16,
+    pub exists: u16,
     pub tech: u16,
     pub flags: u32,
     pub data: ItemData
 }
 impl Serial for InvItem {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        try!(self.equipped.serialize(dst));
+        try!(self.exists.serialize(dst));
         try!(self.tech.serialize(dst));
         try!(self.flags.serialize(dst));
         try!(self.data.serialize(dst));
@@ -23,12 +23,12 @@ impl Serial for InvItem {
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        let equipped = try!(u16::deserialize(src));
+        let exists = try!(u16::deserialize(src));
         let tech = try!(u16::deserialize(src));
         let flags = try!(u32::deserialize(src));
         let data = try!(ItemData::deserialize(src));
         Ok(InvItem {
-            equipped: equipped,
+            exists: exists,
             tech: tech,
             flags: flags,
             data: data
@@ -39,7 +39,7 @@ impl Serial for InvItem {
 impl Default for InvItem {
     fn default() -> InvItem {
         InvItem {
-            equipped: 0xFF00,
+            exists: 0,
             tech: 0,
             flags: 0,
             data: Default::default()
