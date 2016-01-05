@@ -67,9 +67,9 @@ pub struct Timestamp {
 }
 impl Serial for Timestamp {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        try!(write_ascii_len(&format!("{:04}:{:02}:{:02}: {:02}:{:02}:{:02}.{:03}",
-            self.year, self.month, self.day, self.hour, self.minute, self.second, self.msec),
-            28, dst));
+        let timestamp_string = format!("{:04}:{:02}:{:02}: {:02}:{:02}:{:02}.{:03}",
+            self.year, self.month, self.day, self.hour, self.minute, self.second, self.msec);
+        try!(write_ascii_len(&timestamp_string, 28, dst));
         Ok(())
     }
 

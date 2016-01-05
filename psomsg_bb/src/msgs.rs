@@ -439,7 +439,7 @@ impl Serial for BbCharInfo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct BbFullChar(pub BbFullCharData);
 impl Serial for BbFullChar {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
@@ -497,6 +497,86 @@ impl Serial for BbScrollMsg {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct BbCreateGame {
+    pub name: String,
+    pub password: String,
+    pub difficulty: u8,
+    pub battle: u8,
+    pub challenge: u8,
+    pub episode: u8,
+    pub single_player: u8
+}
+impl Serial for BbCreateGame {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        unimplemented!()
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        try!(u64::deserialize(src)); //padding
+        let name = try!(read_utf16_len(16*2, src));
+        let password = try!(read_utf16_len(16*2, src));
+        let difficulty = try!(Serial::deserialize(src));
+        let battle = try!(Serial::deserialize(src));
+        let challenge = try!(Serial::deserialize(src));
+        let episode = try!(Serial::deserialize(src));
+        let single_player = try!(Serial::deserialize(src));
+        try!(src.read(&mut [0; 3])); //padding
+        Ok(BbCreateGame {
+            name: name,
+            password: password,
+            difficulty: difficulty,
+            battle: battle,
+            challenge: challenge,
+            episode: episode,
+            single_player: single_player
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BbGameJoin {
+    pub maps: Vec<u32>,
+    pub players: Vec<PlayerHdr>,
+    pub client_id: u8,
+    pub leader_id: u8,
+    pub one: u8,
+    pub difficulty: u8,
+    pub battle: u8,
+    pub event: u8,
+    pub section: u8,
+    pub challenge: u8,
+    pub rand_seed: u32,
+    pub episode: u8,
+    pub one2: u8,
+    pub single_player: u8,
+    pub unused: u8
+}
+impl Serial for BbGameJoin {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(write_array(&self.maps, 0x20, dst));
+        try!(write_array(&self.players, 4, dst));
+        try!(self.client_id.serialize(dst));
+        try!(self.leader_id.serialize(dst));
+        try!(self.one.serialize(dst));
+        try!(self.difficulty.serialize(dst));
+        try!(self.battle.serialize(dst));
+        try!(self.event.serialize(dst));
+        try!(self.section.serialize(dst));
+        try!(self.challenge.serialize(dst));
+        try!(self.rand_seed.serialize(dst));
+        try!(self.episode.serialize(dst));
+        try!(self.one2.serialize(dst));
+        try!(self.single_player.serialize(dst));
+        try!(self.unused.serialize(dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        unimplemented!()
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct BbSecurityData {
     // uint32_t magic;                     /* Must be 0xDEADBEEF */
@@ -534,6 +614,24 @@ impl Serial for BbSecurityData {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct BbChat(pub u32, pub String);
+impl Serial for BbChat {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(0u32.serialize(dst));
+        try!(self.0.serialize(dst));
+        try!(write_utf16(&self.1, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        try!(u32::deserialize(src));
+        let gc = try!(Serial::deserialize(src));
+        let text = try!(read_utf16(src));
+        Ok(BbChat(gc, text))
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BbTeamAndKeyData {
     // uint8_t unk[0x114];
@@ -553,8 +651,9 @@ pub struct BbTeamAndKeyData {
     pub guildcard: u32,
     pub team_id: u32,
     pub team_info: (u32, u32),
-    pub team_priv: u32,
+    pub team_priv: u16,
     pub team_name: String,
+    pub team_flag: Vec<u8>,
     pub team_rewards: u64
 }
 impl Serial for BbTeamAndKeyData {
@@ -566,9 +665,10 @@ impl Serial for BbTeamAndKeyData {
         try!(dst.write_u32::<LE>(self.team_id));
         try!(dst.write_u32::<LE>(self.team_info.0));
         try!(dst.write_u32::<LE>(self.team_info.1));
-        try!(dst.write_u32::<LE>(self.team_priv));
+        try!(dst.write_u16::<LE>(self.team_priv));
+        try!(dst.write_u16::<LE>(0));
         try!(write_utf16_len(&self.team_name, 32, dst));
-        try!(dst.write_all(&vec![0u8; 2048][..])); // team flag sooooooooon
+        try!(write_array(&self.team_flag, 2048, dst));
         try!(dst.write_u64::<LE>(self.team_rewards));
         Ok(())
     }
@@ -580,8 +680,10 @@ impl Serial for BbTeamAndKeyData {
         let guildcard = try!(src.read_u32::<LE>());
         let team_id = try!(src.read_u32::<LE>());
         let team_info = (try!(src.read_u32::<LE>()), try!(src.read_u32::<LE>()));
-        let team_priv = try!(src.read_u32::<LE>());
+        let team_priv = try!(src.read_u16::<LE>());
+        try!(src.read_u16::<LE>());
         let team_name = try!(read_utf16_len(32, src));
+        let team_flag = try!(read_array(2048, src));
         let team_rewards = try!(src.read_u64::<LE>());
         Ok(BbTeamAndKeyData {
             unk: unk,
@@ -592,6 +694,7 @@ impl Serial for BbTeamAndKeyData {
             team_info: team_info,
             team_priv: team_priv,
             team_name: team_name,
+            team_flag: team_flag,
             team_rewards: team_rewards
         })
     }
@@ -608,7 +711,8 @@ impl Default for BbTeamAndKeyData {
             team_id: 0,
             team_info: (0, 0),
             team_priv: 0,
-            team_name: "".to_string(),
+            team_name: "\tEDefault".to_string(),
+            team_flag: vec![Default::default(); 2048],
             team_rewards: 0xFFFFFFFFFFFFFFFF
         }
     }
@@ -647,5 +751,29 @@ impl Serial for ParamHeader {
             offset: offset,
             filename: filename
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::Cursor;
+    use psoserial::Serial;
+    use super::*;
+    use super::super::Message;
+
+    #[test]
+    fn test_bb_full_char_size() {
+        let mut cursor = Cursor::new(Vec::new());
+        let a: Message = BbFullChar::default().into();
+        a.serialize(&mut cursor).unwrap();
+        assert_eq!(cursor.position(), 0x399C + 4);
+    }
+
+    #[test]
+    fn test_bb_key_team_config_size() {
+        let mut cursor = Cursor::new(Vec::new());
+        let a = BbTeamAndKeyData::default();
+        a.serialize(&mut cursor).unwrap();
+        assert_eq!(cursor.position(), 2804);
     }
 }

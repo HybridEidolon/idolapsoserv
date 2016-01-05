@@ -98,6 +98,9 @@ impl BlockService {
                     let mut h = self.make_handler(id);
                     match m {
                         Message::BbLogin(_, m) => { h.bb_login(m) },
+                        Message::BbCharDat(_, m) => { h.bb_char_dat(m) },
+                        Message::BbChat(_, m) => { h.bb_chat(m) },
+                        Message::BbCreateGame(_, m) => { h.bb_create_game(m) },
                         a => {
                             info!("{:?}", a);
                         }

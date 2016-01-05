@@ -119,16 +119,16 @@ fn main() {
                 println!("Login service at {:?}", bind);
                 match version {
                     Version::BlueBurst => {
-                        services.push(BbLoginService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender))
+                        services.push(BbLoginService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, &config.data_path))
                     },
                     _ => unimplemented!()
                 }
             },
             &ServiceConf::Ship { ref bind, ref name, ref blocks, .. } => {
                 println!("Ship service at {:?}", bind);
-                services.push(ShipService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, name, &config.data_path, blocks.clone()));
+                services.push(ShipService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, name, blocks.clone()));
             },
-            &ServiceConf::Block { ref bind, .. } => {
+            &ServiceConf::Block { ref bind,.. } => {
                 println!("Block service at {:?}", bind);
                 services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone()));
             },

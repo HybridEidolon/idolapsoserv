@@ -112,7 +112,7 @@ impl Default for LobbyMember {
 mod test {
     use super::*;
     use std::io::Cursor;
-    use ::Serial;
+    use psoserial::Serial;
     #[test]
     fn test_lobby_join_size() {
         let l = LobbyJoin::default();

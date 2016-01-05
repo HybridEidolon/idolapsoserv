@@ -185,7 +185,7 @@ impl Backend for Sqlite {
         let gcnum = info.guildcard_num as i64;
         let team = info.team_id as i64;
         let mut stmt = try_db!(self.conn.prepare("INSERT OR REPLACE INTO bb_guildcard (id,account_id,team_id) VALUES (?,?,?)"));
-        try_db!(stmt.execute(&[&id, &gcnum, &team]));
+        try_db!(stmt.execute(&[&gcnum, &id, &team]));
         Ok(())
     }
 }

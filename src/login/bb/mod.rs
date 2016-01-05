@@ -1,4 +1,7 @@
-//! Ship service runner.
+//! Blue Burst's Login server only officially redirects to a separate
+//! Character server to handle character information, but this is almost
+//! pointless. IDOLA instead handles both the Login and Character steps inside
+//! the BB Login server.
 
 use ::services::{Service, ServiceMsg};
 use ::loop_handler::LoopMsg;
@@ -8,87 +11,75 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 use std::net::SocketAddr;
 use std::rc::Rc;
-use std::sync::Arc;
-use std::collections::HashMap;
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use mio::tcp::TcpListener;
 use mio::Sender;
 
-use rand::random;
-
 use psomsg::bb::*;
+
+use rand::random;
 
 use ::services::message::NetMsg;
 use ::services::ServiceType;
+use ::login::paramfiles::load_paramfiles_msgs;
 
 use ::shipgate::client::SgSender;
 use ::shipgate::client::callbacks::SgCbMgr;
-use ::shipgate::msg::RegisterShip;
-use ::config::BlockConf;
 
-pub mod handler;
 pub mod client;
-
-use self::handler::ShipHandler;
+pub mod handler;
 
 use self::client::ClientState;
+use self::handler::BbLoginHandler;
 
-pub struct ShipService {
+pub struct BbLoginService {
     receiver: Receiver<ServiceMsg>,
     sender: Sender<LoopMsg>,
-    sg_sender: SgCbMgr<ShipHandler>,
+    sg_sender: SgCbMgr<BbLoginHandler>,
     clients: Rc<RefCell<HashMap<usize, ClientState>>>,
-    name: String,
-    blocks: Rc<Vec<BlockConf>>
+    param_files: Rc<(Message, Vec<Message>)>
 }
 
-impl ShipService {
-    pub fn spawn(bind: &SocketAddr,
-                 sender: Sender<LoopMsg>,
-                 key_table: Arc<Vec<u32>>,
-                 sg_sender: &SgSender,
-                 name: &str,
-                 blocks: Vec<BlockConf>) -> Service {
+impl BbLoginService {
+    pub fn spawn(bind: &SocketAddr, sender: Sender<LoopMsg>, key_table: Arc<Vec<u32>>, sg_sender: &SgSender, data_path: &str) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
 
         let sg_sender = sg_sender.clone_with(tx.clone());
 
-        let name = name.to_string();
+        // load param data
+        let params = load_paramfiles_msgs(data_path).expect("Couldn't load param files from data path");
 
         thread::spawn(move|| {
-            let d = ShipService {
+            let d = BbLoginService {
                 receiver: rx,
                 sender: sender,
                 sg_sender: sg_sender.into(),
                 clients: Default::default(),
-                name: name,
-                blocks: Rc::new(blocks)
+                param_files: Rc::new(params)
             };
-            d.run();
+            d.run()
         });
 
-        // TODO this isn't going to work for accepting connections from any version
         Service::new(listener, tx, ServiceType::Bb(key_table))
     }
 
-    fn make_handler(&mut self, client_id: usize) -> ShipHandler {
-        ShipHandler::new(
+    fn make_handler(&mut self, client_id: usize) -> BbLoginHandler {
+        BbLoginHandler::new(
             self.sender.clone(),
             self.sg_sender.clone(),
             client_id,
             self.clients.clone(),
-            self.blocks.clone(),
-            &self.name
+            self.param_files.clone()
         )
     }
 
     pub fn run(mut self) {
-        info!("Ship service running.");
-
-        self.sg_sender.send(RegisterShip("127.0.0.1:13000".parse().unwrap(), self.name.clone())).unwrap();
+        info!("Blue burst login service running");
 
         loop {
             let msg = match self.receiver.recv() {
@@ -98,23 +89,36 @@ impl ShipService {
 
             match msg {
                 ServiceMsg::ClientConnected(id) => {
-                    info!("Client {} connected to ship {}", id, self.name);
+                    info!("Client {} connected", id);
                     let sk = vec![random(); 48];
                     let ck = vec![random(); 48];
                     self.sender.send((id, Message::BbWelcome(0, BbWelcome(sk, ck))).into()).unwrap();
 
-                    // Add to clients table
-                    let cs = ClientState::default();
-                    {self.clients.borrow_mut().insert(id, cs);}
+                    {
+                        let mut b = self.clients.borrow_mut();
+                        b.insert(id, ClientState::default());
+                    }
                 },
                 ServiceMsg::ClientDisconnected(id) => {
-                    info!("Client {} disconnected from ship {}", id, self.name);
-                    {self.clients.borrow_mut().remove(&id);}
+                    info!("Client {} disconnected", id);
+
+                    {
+                        let mut b = self.clients.borrow_mut();
+                        b.remove(&id);
+                    }
                 },
                 ServiceMsg::ClientSaid(id, NetMsg::Bb(m)) => {
                     let mut h = self.make_handler(id);
                     match m {
                         Message::BbLogin(_, m) => { h.bb_login(m) },
+                        Message::BbOptionRequest(_, _) => { h.bb_option_request() },
+                        Message::BbChecksum(_, m) => { h.bb_checksum(m) },
+                        Message::BbGuildRequest(_, _) => { h.bb_guildcard_req() },
+                        Message::BbGuildCardChunkReq(_, r) => { h.bb_guildcard_chunk_req(r) },
+                        Message::BbCharSelect(_, m) => { h.bb_char_select(m) },
+                        Message::BbParamHdrReq(_, _) => { h.bb_param_hdr_req() },
+                        Message::BbParamChunkReq(c, _) => { h.bb_param_chunk_req(c) },
+                        Message::BbCharInfo(_, m) => { h.bb_char_info(m) },
                         Message::MenuSelect(_, m) => { h.menu_select(m) },
                         a => {
                             info!("{:?}", a)

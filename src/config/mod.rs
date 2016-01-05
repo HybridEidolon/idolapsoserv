@@ -41,7 +41,7 @@ pub enum ServiceConf {
         blocks: Vec<BlockConf>
     },
     Block {
-        bind: SocketAddr,
+        bind: SocketAddr
     },
     ShipGate {
         bind: SocketAddr,
