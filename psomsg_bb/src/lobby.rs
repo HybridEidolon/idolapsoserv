@@ -31,7 +31,29 @@ impl Serial for LobbyJoin {
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+        let client_id = try!(Serial::deserialize(src));
+        let leader_id = try!(Serial::deserialize(src));
+        let one = try!(Serial::deserialize(src));
+        let lobby_num = try!(Serial::deserialize(src));
+        let block_num = try!(Serial::deserialize(src));
+        let event = try!(Serial::deserialize(src));
+        try!(u32::deserialize(src));
+        let mut members = Vec::new();
+        loop {
+            match LobbyMember::deserialize(src) {
+                Ok(l) => members.push(l),
+                _ => break
+            }
+        }
+        Ok(LobbyJoin {
+            client_id: client_id,
+            leader_id: leader_id,
+            one: one,
+            lobby_num: lobby_num,
+            block_num: block_num,
+            event: event,
+            members: members
+        })
     }
 }
 impl Default for LobbyJoin {

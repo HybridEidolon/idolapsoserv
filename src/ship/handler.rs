@@ -89,9 +89,9 @@ impl ShipHandler {
                             err_code: 0,
                             tag: 0x00010000,
                             guildcard: a.guildcard_num,
-                            team_id: a.team_id,
-                            security_data: sec_data,
-                            caps: 0x00000102
+                            team_id: 0xFFFFFFFF,
+                            security_data: sec_data.clone(),
+                            caps: 0x00000101
                         });
                         h.sender.send((h.client_id, r).into()).unwrap();
 

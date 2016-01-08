@@ -20,8 +20,8 @@ impl Serial for BbWelcome {
         assert_eq!(0x60, PSOBB_COPYRIGHT_STRING.len() + padding.len());
         try!(dst.write_all(PSOBB_COPYRIGHT_STRING));
         try!(dst.write_all(&padding[..]));
-        try!(dst.write_all(&self.0[..]));
-        try!(dst.write_all(&self.1[..]));
+        try!(write_array(&self.0, 48, dst));
+        try!(write_array(&self.1, 48, dst));
         Ok(())
     }
     fn deserialize(src: &mut Read) -> io::Result<Self> {
@@ -29,6 +29,12 @@ impl Serial for BbWelcome {
         let server_key = try!(read_array(48, src));
         let client_key = try!(read_array(48, src));
         Ok(BbWelcome(server_key, client_key))
+    }
+}
+
+impl Default for BbWelcome {
+    fn default() -> BbWelcome {
+        BbWelcome(vec![0; 48], vec![0; 48])
     }
 }
 
@@ -85,6 +91,22 @@ impl Serial for BbLogin {
             hw_info: hw_info,
             security_data: security_data
         })
+    }
+}
+
+impl Default for BbLogin {
+    fn default() -> BbLogin {
+        BbLogin {
+            tag: 0,
+            guildcard: 0,
+            version: 0,
+            unk: vec![0; 6],
+            team_id: 0,
+            username: Default::default(),
+            password: Default::default(),
+            hw_info: vec![0; 8],
+            security_data: Default::default()
+        }
     }
 }
 
@@ -361,6 +383,7 @@ impl Serial for BbParamChunk {
     fn deserialize(src: &mut Read) -> io::Result<Self> {
         let chunk = try!(Serial::deserialize(src));
         let mut data = Vec::new(); try!(src.read_to_end(&mut data));
+        data.truncate(0x6800); // max param file size
         Ok(BbParamChunk {
             chunk: chunk,
             data: data
@@ -577,7 +600,7 @@ impl Serial for BbGameJoin {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BbSecurityData {
     // uint32_t magic;                     /* Must be 0xDEADBEEF */
     // uint8_t slot;                       /* Selected character */
@@ -585,32 +608,41 @@ pub struct BbSecurityData {
     // uint8_t reserved[34];               /* Set to 0 */
     pub magic: u32,
     pub slot: u8,
-    pub sel_char: bool,
-    pub sel_ship: bool
+    pub sel_char: u8,
+    pub reserved: Vec<u8>
 }
 
 impl Serial for BbSecurityData {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
         try!(dst.write_u32::<LE>(self.magic));
         try!(dst.write_u8(self.slot));
-        try!(dst.write_u8(if self.sel_char {1} else {0}));
-        try!(dst.write_u8(if self.sel_ship {1} else {0}));
-        try!(dst.write_all(&[0; 33][..]));
+        try!(dst.write_u8(self.sel_char));
+        try!(write_array(&self.reserved, 34, dst));
         Ok(())
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
         let magic = try!(src.read_u32::<LE>());
         let slot = try!(src.read_u8());
-        let sel_char = match try!(src.read_u8()) { 0 => false, _ => true };
-        let sel_ship = match try!(src.read_u8()) { 0 => false, _ => true };
-        try!(src.read(&mut [0; 33][..]));
+        let sel_char = try!(src.read_u8());
+        let reserved = try!(read_array(34, src));
         Ok(BbSecurityData {
             magic: magic,
             slot: slot,
             sel_char: sel_char,
-            sel_ship: sel_ship
+            reserved: reserved
         })
+    }
+}
+
+impl Default for BbSecurityData {
+    fn default() -> BbSecurityData {
+        BbSecurityData {
+            magic: 0,
+            slot: 0,
+            sel_char: 0,
+            reserved: vec![0; 34]
+        }
     }
 }
 
@@ -629,6 +661,79 @@ impl Serial for BbChat {
         let gc = try!(Serial::deserialize(src));
         let text = try!(read_utf16(src));
         Ok(BbChat(gc, text))
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BbTeamInfo {
+    pub guildcard: u32,
+    pub team_id: u32,
+    pub reserved: Vec<u8>,
+    pub priv_level: u32,
+    pub team_name: String,
+    pub guildcard2: u32,
+    pub client_id: u32,
+    pub name: String,
+    pub reserved2: Vec<u8>,
+    pub team_flag: Vec<u8>
+}
+impl Serial for BbTeamInfo {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.guildcard.serialize(dst)); // 0x0
+        try!(self.team_id.serialize(dst)); // 0x4
+        try!(write_array(&self.reserved, 12, dst)); // 0x8
+        try!(self.priv_level.serialize(dst)); // 0x14
+        try!(write_utf16_len(&self.team_name, 24, dst)); // 0x18
+        try!(0x00986C84u32.serialize(dst));
+        try!(self.guildcard2.serialize(dst));
+        try!(self.client_id.serialize(dst)); //
+        try!(write_utf16_len(&self.name, 24, dst)); // 0x44
+        try!(write_array(&self.reserved2, 8, dst));
+        try!(write_array(&self.team_flag, 0x800, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<BbTeamInfo> {
+        let guildcard = try!(Serial::deserialize(src));
+        let team_id = try!(Serial::deserialize(src));
+        let reserved = try!(read_array(12, src));
+        let priv_level = try!(Serial::deserialize(src));
+        let team_name = try!(read_utf16_len(24, src));
+        let _: u32 = try!(Serial::deserialize(src));
+        let guildcard2 = try!(Serial::deserialize(src));
+        let client_id = try!(Serial::deserialize(src));
+        let name = try!(read_utf16_len(24, src));
+        let reserved2 = try!(read_array(8, src));
+        let team_flag = try!(read_array(2048, src));
+        Ok(BbTeamInfo {
+            guildcard: guildcard,
+            team_id: team_id,
+            reserved: reserved,
+            priv_level: priv_level,
+            team_name: team_name,
+            guildcard2: guildcard2,
+            client_id: client_id,
+            name: name,
+            reserved2: reserved2,
+            team_flag: team_flag
+        })
+    }
+}
+
+impl Default for BbTeamInfo {
+    fn default() -> BbTeamInfo {
+        BbTeamInfo {
+            guildcard: 0,
+            team_id: 0,
+            reserved: vec![0; 12],
+            priv_level: 0,
+            team_name: "".to_string(),
+            guildcard2: 0,
+            client_id: 0,
+            name: "".to_string(),
+            reserved2: vec![0; 8],
+            team_flag: vec![0u8; 0x800]
+        }
     }
 }
 
@@ -654,37 +759,39 @@ pub struct BbTeamAndKeyData {
     pub team_priv: u16,
     pub team_name: String,
     pub team_flag: Vec<u8>,
-    pub team_rewards: u64
+    pub team_rewards: u32
 }
 impl Serial for BbTeamAndKeyData {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        try!(write_array(&self.unk, 0x114, dst));
-        try!(write_array(&self.key_config, 0x16C, dst));
-        try!(write_array(&self.joy_config, 0x38, dst));
+        try!(write_array(&self.unk, 276, dst));
+        try!(write_array(&self.key_config, 364, dst));
+        try!(write_array(&self.joy_config, 56, dst));
         try!(dst.write_u32::<LE>(self.guildcard));
         try!(dst.write_u32::<LE>(self.team_id));
         try!(dst.write_u32::<LE>(self.team_info.0));
         try!(dst.write_u32::<LE>(self.team_info.1));
         try!(dst.write_u16::<LE>(self.team_priv));
         try!(dst.write_u16::<LE>(0));
-        try!(write_utf16_len(&self.team_name, 32, dst));
+        try!(write_utf16_len(&self.team_name, 28, dst));
+        try!(0x00986C84u32.serialize(dst));
         try!(write_array(&self.team_flag, 2048, dst));
-        try!(dst.write_u64::<LE>(self.team_rewards));
+        try!(self.team_rewards.serialize(dst));
         Ok(())
     }
 
     fn deserialize(src: &mut Read) -> io::Result<BbTeamAndKeyData> {
-        let unk = try!(read_array(0x114, src));
-        let key_config = try!(read_array(0x16C, src));
-        let joy_config = try!(read_array(0x38, src));
+        let unk = try!(read_array(276, src));
+        let key_config = try!(read_array(364, src));
+        let joy_config = try!(read_array(56, src));
         let guildcard = try!(src.read_u32::<LE>());
         let team_id = try!(src.read_u32::<LE>());
         let team_info = (try!(src.read_u32::<LE>()), try!(src.read_u32::<LE>()));
         let team_priv = try!(src.read_u16::<LE>());
         try!(src.read_u16::<LE>());
-        let team_name = try!(read_utf16_len(32, src));
+        let team_name = try!(read_utf16_len(28, src));
+        try!(u32::deserialize(src));
         let team_flag = try!(read_array(2048, src));
-        let team_rewards = try!(src.read_u64::<LE>());
+        let team_rewards = try!(Serial::deserialize(src));
         Ok(BbTeamAndKeyData {
             unk: unk,
             key_config: key_config,
@@ -704,16 +811,16 @@ impl Default for BbTeamAndKeyData {
     fn default() -> BbTeamAndKeyData {
         BbTeamAndKeyData {
             // TODO actual BB defaults for these
-            unk: vec![0u8; 0x114],
+            unk: vec![0u8; 276],
             key_config: default_config::DEFAULT_KEYS.to_vec(),
             joy_config: default_config::DEFAULT_JOY.to_vec(),
-            guildcard: 0,
+            guildcard: 0, // This is always 0 if the player isn't in a team.
             team_id: 0,
             team_info: (0, 0),
             team_priv: 0,
-            team_name: "\tEDefault".to_string(),
-            team_flag: vec![Default::default(); 2048],
-            team_rewards: 0xFFFFFFFFFFFFFFFF
+            team_name: "".to_string(), // Must be zeroed out when not in a team
+            team_flag: vec![0; 2048],
+            team_rewards: 0xFFFFFFFF
         }
     }
 }
@@ -766,7 +873,8 @@ mod test {
         let mut cursor = Cursor::new(Vec::new());
         let a: Message = BbFullChar::default().into();
         a.serialize(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), 0x399C + 4);
+        assert_eq!(cursor.position(), 0x39A0);
+        let array = cursor.into_inner();
     }
 
     #[test]
@@ -774,6 +882,45 @@ mod test {
         let mut cursor = Cursor::new(Vec::new());
         let a = BbTeamAndKeyData::default();
         a.serialize(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), 2804);
+        assert_eq!(cursor.position(), 0xAF0);
+    }
+
+    #[test]
+    fn test_bb_option_config() {
+        let mut cursor = Cursor::new(Vec::new());
+        let a: Message = BbOptionConfig(BbTeamAndKeyData::default()).into();
+        a.serialize(&mut cursor).unwrap();
+        let position = cursor.position();
+        let array = cursor.into_inner();
+        assert_eq!(position, 2808);
+    }
+
+    #[test]
+    fn test_security_data_size() {
+        let mut cursor = Cursor::new(Vec::new());
+        let a = BbSecurityData::default();
+        a.serialize(&mut cursor).unwrap();
+        assert_eq!(cursor.position(), 40);
+    }
+
+    #[test]
+    fn test_bb_login_size() {
+        let mut cursor = Cursor::new(Vec::new());
+        let a: Message = BbLogin::default().into();
+        a.serialize(&mut cursor).unwrap();
+        assert_eq!(cursor.position(), 184);
+        let array = cursor.into_inner();
+        println!("Check header's size");
+        assert_eq!(array[0], 180);
+        assert_eq!(array[1], 0);
+    }
+
+    #[test]
+    fn test_welcome_size() {
+        let mut cursor = Cursor::new(Vec::new());
+        let a: Message = BbWelcome::default().into();
+        a.serialize(&mut cursor).unwrap();
+        assert_eq!(cursor.position(), 200);
+        let array = cursor.into_inner();
     }
 }

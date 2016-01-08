@@ -54,15 +54,17 @@ impl BbLoginHandler {
                         guildcard: 0,
                         team_id: 0,
                         security_data: Default::default(),
-                        caps: 0x00000102
+                        caps: 0x00000101
                     });
                     h.sender.send((h.client_id, r).into()).unwrap();
                     return
                 }
 
                 // get BB extended account data
+                let sec_data = sec_data.clone();
                 h.sg_sender.request(h.client_id, BbGetAccountInfo { account_id: sm.account_id }, move|mut h, sm| {
                     if let Sgm::BbGetAccountInfoAck(_, sm) = sm {
+                        let sec_data = sec_data.clone();
                         // First of all, if account acquisition failed, we should disconnect immediately.
                         if sm.status != 0 {
                             let r = Message::LargeMsg(0, LargeMsg("Internal DB error.".to_string()));
@@ -91,9 +93,9 @@ impl BbLoginHandler {
                                 err_code: 0,
                                 tag: 0x00010000,
                                 guildcard: sm.guildcard_num,
-                                team_id: sm.team_id,
+                                team_id: 0xFFFFFFFF,
                                 security_data: sec_data,
-                                caps: 0x00000102
+                                caps: 0x00000101
                             });
                             h.sender.send((h.client_id, r).into()).unwrap();
 
@@ -118,14 +120,14 @@ impl BbLoginHandler {
                                 err_code: 0,
                                 tag: 0x00010000,
                                 guildcard: sm.guildcard_num,
-                                team_id: sm.team_id,
-                                security_data: sec_data,
-                                caps: 0x00000102
+                                team_id: 0xFFFFFFFF,
+                                security_data: sec_data.clone(),
+                                caps: 0x00000101
                             });
                             h.sender.send((h.client_id, r).into()).unwrap();
 
                             // If they've selected a character, they want the ship list now.
-                            if sec_data.sel_char {
+                            if sec_data.sel_char != 0 {
                                 let r = Message::Timestamp(0, Timestamp {
                                     year: 2016,
                                     month: 1,
@@ -220,14 +222,32 @@ impl BbLoginHandler {
         let BbCharSelect { slot, selecting } = m;
         if selecting {
             // They are selecting an existing character slot.
-            let r = Message::LargeMsg(0, LargeMsg("how'd you do that. you can't even make characters yet. get out.".to_string()));
+            // TODO
+            let mut b = self.clients.borrow_mut();
+            let mut c = b.get_mut(&self.client_id).unwrap();
+            c.sec_data.sel_char = 1;
+            let r = Message::BbSecurity(0, BbSecurity {
+                err_code: 0,
+                tag: 0x00010000,
+                guildcard: c.bb_guildcard,
+                team_id: 0xFFFFFFFF,
+                security_data: c.sec_data.clone(),
+                caps: 0x00000101
+            });
+            self.sender.send((self.client_id, r).into()).unwrap();
+            let r = Message::BbCharAck(0, BbCharAck {
+                slot: slot,
+                code: 0
+            });
+            //let r = Message::LargeMsg(0, LargeMsg("how'd you do that. you can't even make characters yet. get out.".to_string()));
             self.sender.send((self.client_id, r).into()).unwrap();
         } else {
             // They want information about a character slot.
-            let r = Message::BbCharAck(0, BbCharAck {
-                slot: slot,
-                code: 2 //nonexistant
-            });
+            let r = Message::BbCharInfo(0, BbCharInfo(slot, BbMiniCharData::default()));
+            // let r = Message::BbCharAck(0, BbCharAck {
+            //     slot: slot,
+            //     code: 2 //exists?
+            // });
             self.sender.send((self.client_id, r).into()).unwrap();
         }
     }
@@ -251,30 +271,30 @@ impl BbLoginHandler {
     pub fn bb_char_info(&mut self, m: BbCharInfo) {
         let BbCharInfo(slot, chardata) = m;
 
-        info!("Character created: {}", chardata.name);
+        info!("Character created: {:?}", chardata);
 
         // TODO persist this character to shipgate
         let sec_data;
         let bb_guildcard;
-        let team_id;
+        //let team_id;
         {
             let mut b = self.clients.borrow_mut();
             let c = b.get_mut(&self.client_id).unwrap();
             c.sec_data.slot = slot as u8;
-            c.sec_data.sel_char = true;
+            c.sec_data.sel_char = 1;
             c.sec_data.magic = 0xCAFEB00B;
             sec_data = c.sec_data.clone();
             bb_guildcard = c.bb_guildcard;
-            team_id = c.team_id;
+            //team_id = c.team_id;
         }
 
         let r = Message::BbSecurity(0, BbSecurity {
             err_code: 0,
             tag: 0x00010000,
             guildcard: bb_guildcard,
-            team_id: team_id,
+            team_id: 0xFFFFFFFF,
             security_data: sec_data.clone(),
-            caps: 0x00000102
+            caps: 0x00000101
         });
         self.sender.send((self.client_id, r).into()).unwrap();
 

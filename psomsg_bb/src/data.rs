@@ -82,7 +82,9 @@ impl Serial for BbMiniCharData {
         try!(self.hair_b.serialize(dst));
         try!(self.prop_x.serialize(dst));
         try!(self.prop_y.serialize(dst));
-        try!(write_utf16_len(&self.name, 32, dst));
+        try!(write_utf16_len(&self.name, 24, dst));
+        try!(self.play_time.serialize(dst));
+        try!(0u32.serialize(dst));
         try!(self.play_time.serialize(dst));
         Ok(())
     }
@@ -111,7 +113,9 @@ impl Serial for BbMiniCharData {
         let hair_b = try!(src.read_u16::<LE>());
         let prop_x = try!(src.read_f32::<LE>());
         let prop_y = try!(src.read_f32::<LE>());
-        let name = try!(read_utf16_len(32, src));
+        let name = try!(read_utf16_len(24, src));
+        try!(u32::deserialize(src));
+        try!(u32::deserialize(src));
         let play_time = try!(src.read_u32::<LE>());
         Ok(BbMiniCharData {
             exp: exp,
@@ -138,5 +142,35 @@ impl Serial for BbMiniCharData {
             name: name,
             play_time: play_time
         })
+    }
+}
+
+impl Default for BbMiniCharData {
+    fn default() -> BbMiniCharData {
+        BbMiniCharData {
+            exp: 0,
+            level: 0,
+            guildcard: "  ".to_string(),
+            name_color: 0xFFFFFFFF,
+            model: 0,
+            name_color_checksum: 0,
+            section: 0,
+            class: 0,
+            v2flags: 0,
+            version: 3,
+            v1flags: 0x25,
+            costume: 0,
+            skin: 0,
+            face: 0,
+            head: 0,
+            hair: 0,
+            hair_r: 0,
+            hair_g: 0,
+            hair_b: 0,
+            prop_x: 0.0,
+            prop_y: 0.0,
+            name: "\tEDefault".to_string(),
+            play_time: 0
+        }
     }
 }

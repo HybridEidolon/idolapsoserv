@@ -10,15 +10,17 @@ pub fn read_ascii_len(len: u32, src: &mut Read) -> io::Result<String> {
     let mut r = vec![0u8; len as usize];
     try!(src.read(&mut r));
     // up to first null
-    let mut end = 0;
+    let mut end = len as usize;
     {
         for (i, c) in r.iter().enumerate() {
             if *c == 0 {
+                debug!("truncating string repr by buffer {:?}", r);
                 end = i;
                 break;
             }
         }
     }
+    debug!("decoding string truncated to {} from {}", end, len);
     match ASCII.decode(&r[..end], Replace) {
         Ok(s) => Ok(s),
         Err(e) => Err(io::Error::new(io::ErrorKind::Other, format!("Unable decode ascii: {:?}", e)))
@@ -37,10 +39,11 @@ pub fn write_ascii_len(s: &str, len: usize, dst: &mut Write) -> io::Result<()> {
 
     let padding: isize = len as isize - r.len() as isize;
     if padding < 0 {
-        warn!("utf16 string too long, truncating to fit");
+        warn!("ascii string too long, truncating to fit");
         try!(dst.write_all(&r[..len]));
         Ok(())
     } else {
+        debug!("encoding string padded to {} from {}", len, len as isize - padding);
         try!(dst.write_all(&r[..]));
         try!(dst.write_all(&vec![0u8; padding as usize]));
         Ok(())
@@ -98,12 +101,17 @@ pub fn read_utf16_len(len: usize, src: &mut Read) -> io::Result<String> {
     let mut r = vec![0u8; len as usize];
     try!(src.read(&mut r));
     // up to first 2 nulls
-    let mut end = 0;
-    {
-        for i in 0..(r.len()/2) {
-            if r[(i*2)] == 0 && r[(i*2)+1] == 0 {
-                end = i*2;
+    let mut nulls = 0;
+    let mut end = r.len();
+    for (i, ch) in r.iter().enumerate() {
+        if *ch == 0 {
+            nulls += 1;
+            if nulls == 2 {
+                end = i;
+                break
             }
+        } else {
+            nulls = 0;
         }
     }
     match UTF_16LE.decode(&r[..end], Replace) {

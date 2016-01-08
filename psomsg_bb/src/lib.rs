@@ -25,6 +25,7 @@ pub mod data;
 pub mod chara;
 pub mod lobby;
 pub mod player;
+pub mod subcmd;
 
 pub use self::msgs::*;
 pub use psomsg_common::*;
@@ -32,6 +33,7 @@ pub use self::data::*;
 pub use self::chara::*;
 pub use self::lobby::*;
 pub use self::player::*;
+pub use self::subcmd::*;
 
 macro_rules! gen_message_enum {
     ($($id:expr => $name:ident),*) => {
@@ -46,7 +48,7 @@ macro_rules! gen_message_enum {
                 use std::io::Cursor;
                 let mut buf = Vec::with_capacity(4096);
                 let msg_type: u16;
-                let mut size: u16;
+                let size: u16;
                 let flags: u32;
                 debug!("Serializing message");
                 {
@@ -70,7 +72,7 @@ macro_rules! gen_message_enum {
                     let buf_len = buf.len();
                     debug!("contents need to be padded by {}", 8 - buf_len % 8);
                     buf.append(&mut vec![0u8; (8 - buf_len % 8) as usize]);
-                    size += (8 - buf_len % 8) as u16;
+                    // size += (8 - buf_len % 8) as u16;
                 }
                 debug!("Serializing header");
                 let hdr_buf;
@@ -81,7 +83,7 @@ macro_rules! gen_message_enum {
                     try!(curs.write_u32::<LE>(flags));
                     hdr_buf = curs.into_inner();
                 }
-                debug!("Serializing into: size {}, msg_type {:x}, flags {}", size, msg_type, flags);
+                debug!("Serializing into: size {}, msg_type 0x{:x}, flags {}", size + 8, msg_type, flags);
                 try!(dst.write_all(&hdr_buf));
                 debug!("Serializing message contents");
                 try!(dst.write_all(&buf));
@@ -156,6 +158,7 @@ gen_message_enum! {
     0x0010 => MenuSelect,
     0x0011 => BbInfoReply,
     0x0019 => Redirect,
+    0x0060 => BbSubCmd60,
     0x0061 => BbCharDat,
     0x0064 => BbGameJoin,
     0x0067 => LobbyJoin,
@@ -165,6 +168,7 @@ gen_message_enum! {
     0x0093 => BbLogin,
     0x0095 => CharDataRequest,
     0x001A => LargeMsg,
+    0x001D => Ping,
     0x00A0 => ShipList,
     0x00B1 => Timestamp,
     0x00C1 => BbCreateGame,
@@ -182,6 +186,7 @@ gen_message_enum! {
     0x02E8 => BbChecksumAck,
     0x03E8 => BbGuildRequest,
     0x04E8 => BbAddGuildCard,
+    0x15EA => BbTeamInfo,
     0x01EB => BbParamHdr,
     0x02EB => BbParamChunk,
     0x03EB => BbParamChunkReq,

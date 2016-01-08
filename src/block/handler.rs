@@ -1,13 +1,13 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs::File;
+//use std::fs::File;
 
 use mio::Sender;
 
 use psomsg::bb::*;
 
-use ::game::CharClass;
+//use ::game::CharClass;
 use ::shipgate::client::callbacks::SgCbMgr;
 use ::loop_handler::LoopMsg;
 use ::shipgate::msg::Message as Sgm;
@@ -75,9 +75,9 @@ impl BlockHandler {
                             err_code: 0,
                             tag: 0x00010000,
                             guildcard: a.guildcard_num,
-                            team_id: a.team_id,
-                            security_data: sec_data,
-                            caps: 0x00000102
+                            team_id: 0xFFFFFFFF,
+                            security_data: sec_data.clone(),
+                            caps: 0x00000101
                         });
                         h.sender.send((h.client_id, r).into()).unwrap();
 
@@ -87,7 +87,7 @@ impl BlockHandler {
                         c.team_id = a.team_id;
                         c.bb_guildcard = a.guildcard_num;
 
-                        let mut fc;
+                        let mut fc: BbFullCharData;
                         {
                             {
                                 let mut ll: Vec<(u32, u32)> = Vec::new();
@@ -107,45 +107,79 @@ impl BlockHandler {
                                 ll.push((60, 14));
                                 ll.push((60, 15));
                                 ll.push((0, 0));
-                                let r = Message::LobbyList(16, LobbyList { items: ll });
+                                let r = Message::LobbyList(15, LobbyList { items: ll });
                                 h.sender.send((h.client_id, r).into()).unwrap();
                             }
                             // fc = ::util::nsc::read_nsc(&mut File::open("data/default/default_0.nsc").unwrap(), CharClass::HUmar).unwrap();
                             fc = BbFullCharData::default();
-                            // put a saber in their inventory and equip it
-                            // fc.inv.item_count = 1;
-                            // fc.inv.items[0].exists = 1;
-                            // fc.inv.items[0].flags = 0x08;
-                            // fc.inv.items[0].data.data[1] = 0x06;
+                            // {
+                            //     use std::fs::File;
+                            //     use psoserial::Serial;
+                            //     let mut file = File::open("character.bin").unwrap();
+                            //     if let Message::BbFullChar(_, BbFullChar(cha)) = Serial::deserialize(&mut file).unwrap() {
+                            //         fc = cha;
+                            //     } else {
+                            //         info!("had to default");
+                            //         fc = Default::default();
+                            //     }
+                            //     info!("{:?}", fc);
+                            // }
+                            // monomates in their inventory
+                            // fc.inv.item_count = 255;
+                            // fc.inv.hp_mats = 255;
+                            // fc.inv.tp_mats = 255;
+                            // fc.inv.lang = 255;
+                            // for item in fc.inv.items.iter_mut() {
+                            //     item.exists = 0xFF00;
+                            //     item.data.item_id = 0xFFFFFFFF;
+                            // }
+                            // for item in fc.bank.items.iter_mut() {
+                            //     item.data.item_id = 0xFFFFFFFF;
+                            // }
+                            // fc.inv.hp_mats = 255;
+                            // fc.inv.tp_mats = 127;
+                            // fc.inv.items[0].exists = 0x01;
+                            // fc.inv.items[0].flags = 0;
+                            // fc.inv.items[0].data.data[1] = 0x01;
                             // fc.inv.items[0].data.item_id = 0x00010000;
+                            //
+                            // fc.inv.items[1].exists = 0x01;
+                            // fc.inv.items[1].flags = 0;
+                            // fc.inv.items[1].data.data[1] = 0x01;
+                            // fc.inv.items[1].data.item_id = 0x00010001;
 
-                            fc.name = "\tEguaco".to_string();
-                            fc.chara.name = "\tEguaco".to_string();
+                            fc.name = "Rico".to_string();
+                            fc.chara.name = "Rico".to_string();
                             fc.guildcard = a.guildcard_num;
-                            fc.team_name = "\tEFUQBOI".to_string();
-                            fc.key_config = Default::default();
-                            fc.key_config.team_id = a.team_id;
-                            fc.key_config.team_name = fc.team_name.clone();
+                            fc.chara.guildcard = format!("  {}", a.guildcard_num);
+                            // fc.team_name = "\tEFlowen".to_string();
+                            //fc.key_config = Default::default();
+                            fc.key_config.team_id = 0;
+                            // fc.key_config.team_name = fc.team_name.clone();
                             fc.key_config.guildcard = a.guildcard_num;
-                            fc.chara.level = 30;
-                            fc.chara.stats.hp = 400;
+                            fc.key_config.team_rewards = 0xFFFFFFFF;
+                            fc.chara.level = 199;
+                            fc.chara.stats.hp = 100;
                             fc.section = 3;
-                            fc.class = 3;
+                            fc.class = 1;
                             fc.chara.section = 3;
-                            fc.chara.class = 3;
-                            fc.chara.name_color = 0xFFFFAA22;
-                            fc.chara.model = 0;
-                            fc.chara.costume = 3;
+                            fc.chara.class = 1;
+                            fc.chara.model = 1;
+                            fc.chara.model_flag = 8;
+                            fc.chara.costume = 1;
                             fc.chara.skin = 1;
-                            fc.chara.head = 2;
+                            fc.chara.head = 1;
                             fc.chara.hair = 1;
-                            fc.chara.hair_r = 0xF0;
-                            fc.chara.hair_g = 0xA0;
-                            fc.chara.hair_b = 0x30;
+                            fc.chara.hair_r = 0xFF;
+                            fc.chara.hair_g = 0xFF;
+                            fc.chara.hair_b = 0xFF;
                             fc.chara.prop_x = 0.3;
                             fc.chara.prop_y = 0.3;
+                            fc.chara.play_time = 0xFFFFFFFF;
                             fc.autoreply = "".to_string();
                             fc.infoboard = "".to_string();
+
+
                             let r = Message::BbFullChar(0, BbFullChar(fc.clone()));
                             h.sender.send((h.client_id, r).into()).unwrap();
                             c.full_char = Some(fc);
@@ -177,7 +211,7 @@ impl BlockHandler {
 
         let mut l = LobbyJoin::default();
         l.client_id = 0;
-        l.leader_id = 0;
+        l.leader_id = 1;
         l.one = 1;
         l.lobby_num = 0;
         l.block_num = 1;
@@ -188,24 +222,23 @@ impl BlockHandler {
         lm.hdr.client_id = 0;
         lm.hdr.name = fc.name.clone();
         lm.data = fc.chara.clone();
-        // lm.data.name = fc.chara.name.clone();
-        // lm.data.name_color = 0xFFFFFFFF;
-        // lm.data.section = 1;
-        // lm.data.class = 1;
-        // lm.data.level = 30;
-        // lm.data.version = 3;
-        // lm.data.v1flags = 25;
-        // lm.data.hp = 400;
-        // lm.data.model = 0;
-        // lm.data.skin = 1;
-        // lm.data.face = 1;
-        // lm.data.head = 1;
-        // lm.data.hair = 1;
-        // lm.data.prop_x = 1.0;
-        // lm.data.prop_y = 1.0;
+        lm.inventory = fc.inv.clone();
+        for item in lm.inventory.items.iter_mut() {
+            item.data.item_id |= 0x10000000;
+        }
         l.members.push(lm);
+
         //Message::LobbyArrowList(0, LobbyArrowList(Vec::new())).serialize(&mut w).unwrap();
+
         let r = Message::LobbyJoin(1, l);
+        self.sender.send((self.client_id, r).into()).unwrap();
+
+        // send this player's quest data, don't know why
+        let r = Message::BbSubCmd60(0, BbSubCmd60::QuestData1 {
+            client_id: 0,
+            unused: 0,
+            data: QuestData1(fc.quest_data1.clone())
+        });
         self.sender.send((self.client_id, r).into()).unwrap();
     }
 

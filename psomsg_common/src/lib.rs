@@ -12,7 +12,7 @@ use std::io;
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
 
-use byteorder::{LittleEndian as LE, WriteBytesExt};
+use byteorder::{LittleEndian as LE, BigEndian as BE, WriteBytesExt, ReadBytesExt};
 
 pub mod util;
 
@@ -37,8 +37,14 @@ impl Serial for Redirect {
         Ok(())
     }
 
-    fn deserialize(_: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let ip: Ipv4Addr = try!(src.read_u32::<BE>()).into();
+        let port = try!(Serial::deserialize(src));
+        try!(u16::deserialize(src));
+        Ok(Redirect {
+            ip: ip,
+            port: port
+        })
     }
 }
 
@@ -50,8 +56,9 @@ impl Serial for LargeMsg {
         Ok(())
     }
 
-    fn deserialize(_: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let msg = try!(read_utf16(src));
+        Ok(LargeMsg(msg))
     }
 }
 
@@ -73,8 +80,27 @@ impl Serial for Timestamp {
         Ok(())
     }
 
-    fn deserialize(_: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let timestamp_string = try!(read_ascii_len(28, src));
+        if timestamp_string.len() != 24 {
+            return Err(io::Error::new(io::ErrorKind::Other, "Timestamp string is not long enough"))
+        }
+        let year: u16 = try!(timestamp_string[0..4].parse().map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+        let month: u8 = try!(timestamp_string[5..7].parse().map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+        let day: u8 = try!(timestamp_string[8..10].parse().map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+        let hour: u8 = try!(timestamp_string[12..14].parse().map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+        let minute: u8 = try!(timestamp_string[15..17].parse().map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+        let second: u8 = try!(timestamp_string[18..20].parse().map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+        let msec: u16 = try!(timestamp_string[21..24].parse().map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+        Ok(Timestamp {
+            year: year,
+            month: month,
+            day: day,
+            hour: hour,
+            minute: minute,
+            second: second,
+            msec: msec
+        })
     }
 }
 
@@ -88,8 +114,15 @@ impl Serial for ShipList {
         Ok(())
     }
 
-    fn deserialize(_: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let mut ships = Vec::new();
+        loop {
+            match ShipListItem::deserialize(src) {
+                Ok(s) => ships.push(s),
+                _ => break
+            }
+        }
+        Ok(ShipList(ships))
     }
 }
 
@@ -103,8 +136,15 @@ impl Serial for BlockList {
         Ok(())
     }
 
-    fn deserialize(_: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let mut blocks = Vec::new();
+        loop {
+            match ShipListItem::deserialize(src) {
+                Ok(s) => blocks.push(s),
+                _ => break
+            }
+        }
+        Ok(BlockList(blocks))
     }
 }
 
@@ -123,8 +163,26 @@ impl Serial for LobbyList {
         Ok(())
     }
 
-    fn deserialize(_: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let mut lobbies = Vec::new();
+        loop {
+            let v1 = match u32::deserialize(src) {
+                Ok(v) => v,
+                Err(_) => break
+            };
+            let v2 = match u32::deserialize(src) {
+                Ok(v) => v,
+                Err(e) => return Err(e)
+            };
+            match u32::deserialize(src) {
+                Ok(_) => (),
+                Err(e) => return Err(e)
+            }
+            lobbies.push((v1, v2));
+        }
+        Ok(LobbyList {
+            items: lobbies
+        })
     }
 }
 
@@ -178,7 +236,18 @@ impl Serial for ShipListItem {
         Ok(())
     }
 
-    fn deserialize(_: &mut Read) -> io::Result<Self> {
-        unimplemented!()
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let menu_id = try!(Serial::deserialize(src));
+        let item_id = try!(Serial::deserialize(src));
+        let flags = try!(Serial::deserialize(src));
+        let name = try!(read_utf16_len(0x22, src));
+        Ok(ShipListItem {
+            menu_id: menu_id,
+            item_id: item_id,
+            flags: flags,
+            name: name
+        })
     }
 }
+
+derive_serial!(Ping);

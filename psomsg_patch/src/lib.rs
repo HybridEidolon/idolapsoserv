@@ -205,7 +205,7 @@ derive_serial!(OneDirUp);
 derive_serial!(StartList);
 derive_serial!(FileInfo { pub patch_id: u32, pub filename: StaticVec<u8, U32> });
 derive_serial!(InfoFinished);
-derive_serial!(FileInfoReply { pub patch_id: u32, pub filename: StaticVec<u8, U32> });
+derive_serial!(FileInfoReply { pub patch_id: u32, pub checksum: u32, pub size: u32 });
 derive_serial!(FileListDone);
 derive_serial!(SendInfo { pub total_length: u32, pub total_file: u32 });
 derive_serial!(SendDone);
@@ -241,8 +241,8 @@ impl Serial for Redirect {
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        let ip_addr: Ipv4Addr = try!(u32::deserialize(src)).into();
-        let port: u16 = try!(Serial::deserialize(src));
+        let ip_addr: Ipv4Addr = try!(src.read_u32::<BE>()).into();
+        let port: u16 = try!(src.read_u16::<BE>());
         Ok(Redirect(SocketAddrV4::new(ip_addr, port)))
     }
 }

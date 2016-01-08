@@ -23,9 +23,9 @@ impl Serial for InvItem {
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        let exists = try!(u16::deserialize(src));
-        let tech = try!(u16::deserialize(src));
-        let flags = try!(u32::deserialize(src));
+        let exists = try!(Serial::deserialize(src));
+        let tech = try!(Serial::deserialize(src));
+        let flags = try!(Serial::deserialize(src));
         let data = try!(ItemData::deserialize(src));
         Ok(InvItem {
             exists: exists,
@@ -39,7 +39,7 @@ impl Serial for InvItem {
 impl Default for InvItem {
     fn default() -> InvItem {
         InvItem {
-            exists: 0,
+            exists: 0x00,
             tech: 0,
             flags: 0,
             data: Default::default()
@@ -195,8 +195,8 @@ pub struct CharStats {
     pub evp: u16,
     pub hp: u16,
     pub dfp: u16,
-    pub ata: u16,
-    pub lck: u16
+    pub lck: u16,
+    pub ata: u16
 }
 impl Serial for CharStats {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
@@ -224,8 +224,8 @@ impl Serial for CharStats {
             evp: evp,
             hp: hp,
             dfp: dfp,
-            ata: ata,
-            lck: lck
+            lck: lck,
+            ata: ata
         })
     }
 }
@@ -240,14 +240,14 @@ pub struct BbChar {
     pub exp: u32,
     pub meseta: u32,
     pub guildcard: String,
-    pub unk3: u64,
+    pub unk3: Vec<u8>,
     pub name_color: u32,
     pub model: u8,
-    pub play_time: u32,
+    pub unk5: Vec<u8>,
     pub name_color_checksum: u32,
     pub section: u8,
     pub class: u8,
-    pub v2flags: u8,
+    pub model_flag: u8,
     pub version: u8,
     pub v1flags: u32,
     pub costume: u16,
@@ -261,6 +261,8 @@ pub struct BbChar {
     pub prop_x: f32,
     pub prop_y: f32,
     pub name: String,
+    pub play_time: u32,
+    pub unk4: Vec<u8>,
     pub config: Vec<u8>,
     pub techniques: Vec<u8>
 }
@@ -273,16 +275,15 @@ impl Serial for BbChar {
         try!(self.level.serialize(dst));
         try!(self.exp.serialize(dst));
         try!(self.meseta.serialize(dst));
-        try!(write_ascii_len(&self.guildcard, 16, dst));
-        try!(self.unk3.serialize(dst));
+        try!(write_ascii_len(&self.guildcard, 10, dst));
+        try!(write_array(&self.unk3, 14, dst));
         try!(self.name_color.serialize(dst));
         try!(self.model.serialize(dst));
-        try!(dst.write_all(&[0u8; 11]));
-        try!(self.play_time.serialize(dst));
+        try!(write_array(&self.unk5, 15, dst));
         try!(self.name_color_checksum.serialize(dst));
         try!(self.section.serialize(dst));
         try!(self.class.serialize(dst));
-        try!(self.v2flags.serialize(dst));
+        try!(self.model_flag.serialize(dst));
         try!(self.version.serialize(dst));
         try!(self.v1flags.serialize(dst));
         try!(self.costume.serialize(dst));
@@ -295,7 +296,9 @@ impl Serial for BbChar {
         try!(self.hair_b.serialize(dst));
         try!(self.prop_x.serialize(dst));
         try!(self.prop_y.serialize(dst));
-        try!(write_utf16_len(&self.name, 32, dst));
+        try!(write_utf16_len(&self.name, 24, dst));
+        try!(self.play_time.serialize(dst));
+        try!(write_array(&self.unk4, 4, dst));
         try!(write_array(&self.config, 0xE8, dst));
         try!(write_array(&self.techniques, 0x14, dst));
         Ok(())
@@ -309,16 +312,15 @@ impl Serial for BbChar {
         let level = try!(u32::deserialize(src));
         let exp = try!(u32::deserialize(src));
         let meseta = try!(u32::deserialize(src));
-        let guildcard = try!(read_ascii_len(16, src));
-        let unk3 = try!(u64::deserialize(src));
+        let guildcard = try!(read_ascii_len(10, src));
+        let unk3 = try!(read_array(14, src));
         let name_color = try!(u32::deserialize(src));
         let model = try!(u8::deserialize(src));
-        try!(src.read(&mut [0u8; 11]));
-        let play_time = try!(u32::deserialize(src));
+        let unk5 = try!(read_array(15, src));
         let name_color_checksum = try!(u32::deserialize(src));
         let section = try!(u8::deserialize(src));
         let class = try!(u8::deserialize(src));
-        let v2flags = try!(u8::deserialize(src));
+        let model_flag = try!(u8::deserialize(src));
         let version = try!(u8::deserialize(src));
         let v1flags = try!(u32::deserialize(src));
         let costume = try!(u16::deserialize(src));
@@ -331,7 +333,9 @@ impl Serial for BbChar {
         let hair_b = try!(u16::deserialize(src));
         let prop_x = try!(f32::deserialize(src));
         let prop_y = try!(f32::deserialize(src));
-        let name = try!(read_utf16_len(32, src));
+        let name = try!(read_utf16_len(24, src));
+        let play_time = try!(Serial::deserialize(src));
+        let unk4 = try!(read_array(4, src));
         let config = try!(read_array(0xE8, src));
         let techniques = try!(read_array(0x14, src));
         Ok(BbChar {
@@ -346,11 +350,11 @@ impl Serial for BbChar {
             unk3: unk3,
             name_color: name_color,
             model: model,
-            play_time: play_time,
+            unk5: unk5,
             name_color_checksum: name_color_checksum,
             section: section,
             class: class,
-            v2flags: v2flags,
+            model_flag: model_flag,
             version: version,
             v1flags: v1flags,
             costume: costume,
@@ -364,6 +368,8 @@ impl Serial for BbChar {
             prop_x: prop_x,
             prop_y: prop_y,
             name: name,
+            play_time: play_time,
+            unk4: unk4,
             config: config,
             techniques: techniques
         })
@@ -379,19 +385,20 @@ impl Default for BbChar {
             level: 0,
             exp: 0,
             meseta: 0x12C,
-            guildcard: "  400000000".to_string(),
-            unk3: 0,
+            guildcard: "  40000000".to_string(),
+            unk3: vec![0u8; 14],
             name_color: 0,
             model: 0,
+            unk5: vec![0; 15],
             play_time: 0,
             name_color_checksum: 0,
             section: 0,
             class: 0,
-            v2flags: 0,
+            model_flag: 0,
             version: 3,
             v1flags: 0x25,
             costume: 0,
-            skin: 1,
+            skin: 0,
             face: 0,
             head: 0,
             hair: 0,
@@ -401,6 +408,7 @@ impl Default for BbChar {
             prop_x: 0.0,
             prop_y: 0.0,
             name: "\tEASH".to_string(),
+            unk4: vec![0; 4],
             config: vec![
             0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00,
         	0x02, 0x01, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
@@ -554,7 +562,7 @@ impl Default for BbFullCharData {
             team_name: Default::default(),
             guildcard_desc: Default::default(),
             reserved1: 1,
-            reserved2: 0,
+            reserved2: 1,
             section: Default::default(),
             class: Default::default(),
             unk2: Default::default(),
@@ -562,7 +570,7 @@ impl Default for BbFullCharData {
             shortcuts: vec![Default::default(); 0x0A40],
             autoreply: Default::default(),
             infoboard: Default::default(),
-            unk3: vec![Default::default(); 0x001C],
+            unk3: vec![0; 0x001C],
             challenge_data: vec![Default::default(); 0x0140],
             tech_menu: vec![
             0x00, 0x00, 0x06, 0x00, 0x03, 0x00, 0x01, 0x00, 0x07, 0x00, 0x04, 0x00,
@@ -570,8 +578,8 @@ impl Default for BbFullCharData {
         	0x10, 0x00, 0x11, 0x00, 0x0D, 0x00, 0x0A, 0x00, 0x0B, 0x00, 0x0C, 0x00,
         	0x0E, 0x00, 0x00, 0x00],
 
-            unk4: vec![Default::default(); 0x002C],
-            quest_data2: vec![Default::default(); 0x0058],
+            unk4: vec![0; 0x002C],
+            quest_data2: vec![0; 0x0058],
             key_config: Default::default()
         }
     }
@@ -588,7 +596,7 @@ mod test {
         let mut cursor = Cursor::new(Vec::new());
         let ch = BbFullCharData::default();
         ch.serialize(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), 0x399C - 8);
+        assert_eq!(cursor.position(), 0x3994);
     }
 
     #[test]

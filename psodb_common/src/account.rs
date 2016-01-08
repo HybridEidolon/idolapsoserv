@@ -61,7 +61,7 @@ pub struct BbAccountInfo {
 
 impl BbAccountInfo {
     pub fn new() -> BbAccountInfo {
-        let bbgc = (random::<u32>() % 100000000) + 400000000;
+        let bbgc = (random::<u32>() % 10000000) + 40000000;
         BbAccountInfo {
             account_id: 0,
             guildcard_num: bbgc,
