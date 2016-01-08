@@ -41,8 +41,8 @@ pub fn load_paramfiles_msgs(data_root: &str) -> io::Result<(Message, Vec<Message
                     offset: offset,
                     filename: filen.clone()
                 });
-                param_buffer.append(buf);
                 offset += buf.len() as u32;
+                param_buffer.append(buf);
             }
         }
     }

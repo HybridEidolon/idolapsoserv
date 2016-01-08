@@ -2,9 +2,9 @@
 server_keytable = "../data/crypto/bb_table.bin"
 client_keytable = "../data/crypto/bb_table.bin"
 server_patch_port = 11000
-client_patch_port = 13000
+client_patch_port = 7000
 server_login_port = 12000
-client_login_port = 14000
+client_login_port = 7001
 server_patch_ip = "127.0.0.1"
 server_login_ip = "127.0.0.1"
 version_override = "Ephinea 1.1.0"

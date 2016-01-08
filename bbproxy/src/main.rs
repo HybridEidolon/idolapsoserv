@@ -297,7 +297,7 @@ fn bb_proxy_thread(mut client_stream: TcpStream, ip: Ipv4Addr, port: u16, client
                     bad_serial = false;
                 }
             }
-            //println!("S-->C\n{}", hex_view(&buf));
+            println!("S-->C\n{}", hex_view(&buf));
             if let &Message::Redirect(0, Redirect { ref ip, ref port }) = &msg {
                 use std::net::Shutdown;
                 use std::time::Duration;
@@ -394,7 +394,7 @@ fn bb_proxy_thread(mut client_stream: TcpStream, ip: Ipv4Addr, port: u16, client
                     bad_serial = false;
                 }
             }
-            //println!("C-->S\n{}", hex_view(&buf));
+            println!("C-->S\n{}", hex_view(&buf));
             if !bad_serial {
                 match msg.serialize(&mut s_w) {
                     Err(e) => {
