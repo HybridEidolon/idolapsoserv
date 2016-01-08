@@ -156,7 +156,7 @@ impl BlockHandler {
                             //fc.key_config = Default::default();
                             fc.key_config.team_id = 0;
                             // fc.key_config.team_name = fc.team_name.clone();
-                            fc.key_config.guildcard = a.guildcard_num;
+                            // fc.key_config.guildcard = a.guildcard_num;
                             fc.key_config.team_rewards = 0xFFFFFFFF;
                             fc.chara.level = 199;
                             fc.chara.stats.hp = 100;
