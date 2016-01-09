@@ -6,6 +6,7 @@ use mio::util::Slab;
 
 use std::io;
 use std::sync::mpsc::Sender as MpscSender;
+use std::net::SocketAddr;
 
 pub mod client;
 pub mod message;
@@ -20,7 +21,7 @@ use ::shipgate::msg::Message as ShipGateMsg;
 
 #[derive(Clone)]
 pub enum ServiceMsg {
-    ClientConnected(usize),
+    ClientConnected((SocketAddr, usize)),
     ClientSaid(usize, NetMsg),
     ClientDisconnected(usize),
     ShipGateMsg(ShipGateMsg)
@@ -76,7 +77,7 @@ impl Service {
     }
 
     pub fn accept<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
-        let (sock, _addr) = match self.listener.accept() {
+        let (sock, addr) = match self.listener.accept() {
             Ok(Some(s)) => {
                 s
             },
@@ -103,7 +104,7 @@ impl Service {
                 // inserted successfully
                 match self.get_client_mut(token).map(|c| c.register(event_loop)) {
                     Some(Ok(_)) => {
-                        self.sender.send(ServiceMsg::ClientConnected(token.0)).unwrap();
+                        self.sender.send(ServiceMsg::ClientConnected((addr, token.0))).unwrap();
                     },
                     Some(Err(_e)) => {
                         self.clients.remove(token);

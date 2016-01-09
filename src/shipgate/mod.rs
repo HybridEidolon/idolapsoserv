@@ -41,16 +41,8 @@ pub struct ShipGateService {
 #[derive(Clone)]
 pub struct ClientCtx {
     id: usize,
-    authenticated: bool
-}
-
-impl Default for ClientCtx {
-    fn default() -> ClientCtx {
-        ClientCtx {
-            id: 0,
-            authenticated: false
-        }
-    }
+    authenticated: bool,
+    addr: SocketAddr
 }
 
 impl ShipGateService {
@@ -84,11 +76,14 @@ impl ShipGateService {
                 Err(_) => return // receiver closed; we can exit service
             };
             match msg {
-                ServiceMsg::ClientConnected(id) => {
+                ServiceMsg::ClientConnected((addr, id)) => {
                     info!("Client {} connected to shipgate", id);
                     // create a new client context
-                    let mut ctx = ClientCtx::default();
-                    ctx.id = id;
+                    let ctx = ClientCtx {
+                        id: id,
+                        authenticated: false,
+                        addr: addr
+                    };
                     self.clients.insert(id, ctx);
                 },
                 ServiceMsg::ClientDisconnected(id) => {

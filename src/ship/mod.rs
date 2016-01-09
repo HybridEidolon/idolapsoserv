@@ -97,7 +97,7 @@ impl ShipService {
             };
 
             match msg {
-                ServiceMsg::ClientConnected(id) => {
+                ServiceMsg::ClientConnected((_addr, id)) => {
                     info!("Client {} connected to ship {}", id, self.name);
                     let sk = vec![random(); 48];
                     let ck = vec![random(); 48];

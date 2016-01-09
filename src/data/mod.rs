@@ -51,7 +51,7 @@ impl DataService {
 
         for msg in receiver.iter() {
             match msg {
-                ServiceMsg::ClientConnected(id) => {
+                ServiceMsg::ClientConnected((_addr, id)) => {
                     info!("Client {} connected to data service", id);
                     let w = Message::Welcome(Some(Welcome { server_vector: 0, client_vector: 0 }));
                     sender.send(LoopMsg::Client(id, w.into())).unwrap();

@@ -59,7 +59,7 @@ impl PatchService {
         // This service only responds to events; it does not run its own bookkeeping.
         for msg in self.receiver.iter() {
             match msg {
-                ServiceMsg::ClientConnected(id) => {
+                ServiceMsg::ClientConnected((_addr, id)) => {
                     info!("Client {} connected to patch service", id);
                     let w = Message::Welcome(Some(Welcome { server_vector: 0, client_vector: 0 }));
                     self.sender.send(LoopMsg::Client(id, w.into())).unwrap();

@@ -108,7 +108,7 @@ impl BlockService {
             };
 
             match msg {
-                ServiceMsg::ClientConnected(id) => {
+                ServiceMsg::ClientConnected((_addr, id)) => {
                     info!("Client {} connected to block", id);
                     let sk = vec![random(); 48];
                     let ck = vec![random(); 48];
