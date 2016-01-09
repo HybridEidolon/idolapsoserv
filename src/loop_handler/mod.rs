@@ -17,13 +17,6 @@ pub enum LoopMsg {
     DropClient(usize)
 }
 
-// impl From<(usize, NetMsg)> for LoopMsg {
-//     #[inline(always)]
-//     fn from(val: (usize, NetMsg)) -> LoopMsg {
-//         LoopMsg::Client(val.0, val.1)
-//     }
-// }
-
 impl<I: Into<NetMsg>> From<(usize, I)> for LoopMsg {
     #[inline(always)]
     fn from(val: (usize, I)) -> LoopMsg {
@@ -37,7 +30,7 @@ pub struct LoopHandler {
 
 impl LoopHandler {
     pub fn new<H: Handler>(services: Vec<Service>, event_loop: &mut EventLoop<H>) -> LoopHandler {
-        let mut svcs = Slab::new_starting_at(Token(1), 16);
+        let mut svcs = Slab::new_starting_at(Token(1), 100);
         for mut s in services {
             svcs.insert_with(|token| {
                 s.token = token;

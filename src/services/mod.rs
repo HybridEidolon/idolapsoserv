@@ -57,7 +57,7 @@ impl Service {
     }
 
     pub fn register<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
-        self.clients = Slab::new_starting_at(Token(self.token.0 * 1000000), 2000);
+        self.clients = Slab::new_starting_at(Token(self.token.0 * 10000), 2000);
 
         event_loop.register(
             &self.listener,
