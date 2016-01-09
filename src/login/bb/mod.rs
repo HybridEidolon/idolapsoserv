@@ -9,7 +9,7 @@ use ::loop_handler::LoopMsg;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::thread;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, SocketAddrV4};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -40,11 +40,12 @@ pub struct BbLoginService {
     sender: Sender<LoopMsg>,
     sg_sender: SgCbMgr<BbLoginHandler>,
     clients: Rc<RefCell<HashMap<usize, ClientState>>>,
-    param_files: Rc<(Message, Vec<Message>)>
+    param_files: Rc<(Message, Vec<Message>)>,
+    redir_addr: SocketAddrV4
 }
 
 impl BbLoginService {
-    pub fn spawn(bind: &SocketAddr, sender: Sender<LoopMsg>, key_table: Arc<Vec<u32>>, sg_sender: &SgSender, data_path: &str) -> Service {
+    pub fn spawn(bind: &SocketAddr, redir_addr: SocketAddrV4, sender: Sender<LoopMsg>, key_table: Arc<Vec<u32>>, sg_sender: &SgSender, data_path: &str) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -60,7 +61,8 @@ impl BbLoginService {
                 sender: sender,
                 sg_sender: sg_sender.into(),
                 clients: Default::default(),
-                param_files: Rc::new(params)
+                param_files: Rc::new(params),
+                redir_addr: redir_addr
             };
             d.run()
         });
@@ -71,6 +73,7 @@ impl BbLoginService {
     fn make_handler(&mut self, client_id: usize) -> BbLoginHandler {
         BbLoginHandler::new(
             self.sender.clone(),
+            self.redir_addr,
             self.sg_sender.clone(),
             client_id,
             self.clients.clone(),

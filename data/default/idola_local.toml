@@ -66,13 +66,16 @@ type = "data"
 
 ## Login (Blue Burst) ##
 # The BB login server in IDOLA is also the character server in other
-# implementations. It simply redirects to itself. TODO add a redirect address
-# for external facing IPs
+# implementations. It simply redirects to itself by default, but you can
+# set up another BB login service to act as the character service too.
 [[service]]
 bind = "127.0.0.1:12000"
 type = "login"
 # The only currently supported version is BlueBurst.
 version = "BlueBurst"
+# The V4 redirect address for the character service. This must be accessible by
+# clients (i.e. don't set 127.0.0.1 if the LAN or Internet should access)
+addr = "127.0.0.1:12000"
 
 ## Ship ##
 # The ship is where all gameplay occurs.

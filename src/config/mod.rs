@@ -30,10 +30,8 @@ pub enum ServiceConf {
     },
     Login {
         bind: SocketAddr,
-        version: Version
-        // The login service just redirects to one of the ship servers.
-        // In this implementation, the ship servers act as a character server
-        // for BB.
+        version: Version,
+        addr: SocketAddrV4,
     },
     Ship {
         bind: SocketAddr,
@@ -182,9 +180,18 @@ impl ServiceConf {
                             Some(Err(e)) => return Err(e),
                             None => return Err("No version specified for login service".to_string())
                         }
+                        let addr = match t.get("addr")
+                            .and_then(|v| v.as_str())
+                            .map(|v| v.parse())
+                        {
+                            Some(Ok(v)) => v,
+                            Some(Err(e)) => return Err(format!("{:?}", e)),
+                            None => return Err("No redirect address specified for login service (It needs to be accessible by clients, but it can be the same as the bind)".to_string())
+                        };
                         Ok(ServiceConf::Login {
                             bind: bind,
-                            version: version
+                            version: version,
+                            addr: addr
                         })
                     },
                     "ship" => {

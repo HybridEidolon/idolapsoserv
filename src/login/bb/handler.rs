@@ -24,17 +24,19 @@ pub struct BbLoginHandler {
     sg_sender: SgCbMgr<BbLoginHandler>,
     client_id: usize,
     clients: Rc<RefCell<HashMap<usize, ClientState>>>,
-    param_files: Rc<(Message, Vec<Message>)>
+    param_files: Rc<(Message, Vec<Message>)>,
+    redir_addr: SocketAddrV4
 }
 
 impl BbLoginHandler {
-    pub fn new(sender: Sender<LoopMsg>, sg_sender: SgCbMgr<BbLoginHandler>, client_id: usize, clients: Rc<RefCell<HashMap<usize, ClientState>>>, param_files: Rc<(Message, Vec<Message>)>) -> BbLoginHandler {
+    pub fn new(sender: Sender<LoopMsg>, redir_addr: SocketAddrV4, sg_sender: SgCbMgr<BbLoginHandler>, client_id: usize, clients: Rc<RefCell<HashMap<usize, ClientState>>>, param_files: Rc<(Message, Vec<Message>)>) -> BbLoginHandler {
         BbLoginHandler {
             sender: sender,
             sg_sender: sg_sender,
             client_id: client_id,
             clients: clients,
-            param_files: param_files
+            param_files: param_files,
+            redir_addr: redir_addr
         }
     }
 
@@ -101,8 +103,8 @@ impl BbLoginHandler {
 
                             // TODO redirect to actual self IP (need external facing IP)
                             let r = Message::Redirect(0, Redirect {
-                                ip: "127.0.0.1".parse().unwrap(),
-                                port: 12000
+                                ip: *h.redir_addr.ip(),
+                                port: h.redir_addr.port()
                             });
                             h.sender.send((h.client_id, r).into()).unwrap();
                         } else {

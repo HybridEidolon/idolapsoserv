@@ -115,11 +115,11 @@ fn main() {
                 println!("Data service at {:?}", bind);
                 services.push(DataService::spawn(bind, event_loop.channel()));
             },
-            &ServiceConf::Login { ref bind, version, .. } => {
+            &ServiceConf::Login { ref bind, version, addr, .. } => {
                 println!("Login service at {:?}", bind);
                 match version {
                     Version::BlueBurst => {
-                        services.push(BbLoginService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, &config.data_path))
+                        services.push(BbLoginService::spawn(bind, addr, event_loop.channel(), bb_keytable.clone(), &sg_sender, &config.data_path))
                     },
                     _ => unimplemented!()
                 }
