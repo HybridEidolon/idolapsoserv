@@ -16,13 +16,17 @@ use ::shipgate::msg::BbGetAccountInfo;
 
 use super::client::ClientState;
 use super::lobbyhandler::Lobby;
+use super::partyhandler::Party;
+
+const MENU_GAME_LIST: u32 = 0x00080000;
 
 pub struct BlockHandler {
     sender: Sender<LoopMsg>,
     sg_sender: SgCbMgr<BlockHandler>,
-    client_id: usize,
+    pub client_id: usize,
     clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
-    lobbies: Rc<RefCell<Vec<Lobby>>>
+    lobbies: Rc<RefCell<Vec<Lobby>>>,
+    parties: Rc<RefCell<Vec<Party>>>
 }
 
 impl BlockHandler {
@@ -30,13 +34,15 @@ impl BlockHandler {
                sg_sender: SgCbMgr<BlockHandler>,
                client_id: usize,
                clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
-               lobbies: Rc<RefCell<Vec<Lobby>>>) -> BlockHandler {
+               lobbies: Rc<RefCell<Vec<Lobby>>>,
+               parties: Rc<RefCell<Vec<Party>>>) -> BlockHandler {
         BlockHandler {
             sender: sender,
             sg_sender: sg_sender,
             client_id: client_id,
             clients: clients,
-            lobbies: lobbies
+            lobbies: lobbies,
+            parties: parties
         }
     }
 
@@ -263,7 +269,7 @@ impl BlockHandler {
     }
 
     pub fn bb_create_game(&mut self, m: BbCreateGame) {
-        info!("{} creating game {}", self.client_id, m.name);
+        info!("Client {} is creating party {}", self.client_id, &m.name[2..]);
 
         // we first want to remove them from their lobby...
         {
@@ -278,25 +284,39 @@ impl BlockHandler {
             }
         }
 
-        // TODO: parties
-        let cr = self.get_client_state(self.client_id).unwrap();
-        let c = cr.borrow();
+        let psr = self.parties.clone();
+        let mut parties = psr.borrow_mut();
+        // check if a party with that name already exists
+        for p in parties.iter_mut() {
+            if p.name == m.name {
+                self.send_error(self.client_id, "\tEA party with that\nname already exists.");
+                return
+            }
+        }
 
-        let mut l = BbGameJoin::default();
-        l.client_id = 0;
-        l.leader_id = 0;
-        l.one = 1;
-        l.one2 = 1;
-        l.difficulty = m.difficulty;
-        l.episode = m.episode;
-        let mut ph = PlayerHdr::default();
-        ph.tag = 0x00010000;
-        ph.guildcard = c.bb_guildcard;
-        ph.client_id = 0;
-        ph.name = c.full_char.as_ref().unwrap().name.clone();
-        l.players.push(ph);
-        let r: Message = Message::BbGameJoin(0, l);
-        self.sender.send((self.client_id, r).into()).unwrap();
+        // validate based on server support
+        info!("Party is for episode {}", m.episode);
+        if m.challenge != 0 && m.episode == 3 {
+            self.send_error(self.client_id, "\tEChallenge mode is not supported\non Episode 4.\nOnly Episode 1 and 2 have\nChallenge mode.");
+            return
+        }
+        if m.battle != 0 {
+            self.send_error(self.client_id, "\tEBattle mode is not\nsupported yet. Sorry!");
+            return
+        }
+        if m.challenge != 0 {
+            self.send_error(self.client_id, "\tEChallenge mode is not\nsupported yet. Sorry!");
+            return
+        }
+
+        // create the party
+        let pass: Option<&str> = if m.password.len() == 0 { None } else { Some(&m.password) };
+        let mut p = Party::new(&m.name, pass, m.episode, m.difficulty, m.battle != 0, m.challenge != 0, m.single_player != 0);
+
+        let cid = self.client_id;
+        p.add_player(self, cid).unwrap();
+
+        parties.push(p);
     }
 
     pub fn bb_subcmd_60(&mut self, m: BbSubCmd60) {
@@ -306,11 +326,109 @@ impl BlockHandler {
             for l in lobbies.iter_mut() {
                 let cid = self.client_id;
                 if l.has_player(cid) {
-                    l.bb_broadcast(self, Some(cid), m.into()).unwrap();
+                    l.handle_bb_subcmd_60(self, m).unwrap();
                     return
                 }
             }
         }
+        {
+            let pr = self.parties.clone();
+            let ref mut parties = pr.borrow_mut();
+            for p in parties.iter_mut() {
+                let cid = self.client_id;
+                if p.has_player(cid) {
+                    p.handle_bb_subcmd_60(self, m).unwrap();
+                    return
+                }
+            }
+        }
+
+        warn!("Could not find the lobby or party this subcmd was sent by {}.", self.client_id);
+        self.send_fatal_error(self.client_id, "\tEIllegal message");
+    }
+
+    pub fn bb_subcmd_62(&mut self, m: BbSubCmd62) {
+        {
+            let lr = self.lobbies.clone();
+            let ref mut lobbies = lr.borrow_mut();
+            for l in lobbies.iter_mut() {
+                let cid = self.client_id;
+                if l.has_player(cid) {
+                    l.handle_bb_subcmd_62(self, m).unwrap();
+                    return
+                }
+            }
+        }
+        {
+            let pr = self.parties.clone();
+            let ref mut parties = pr.borrow_mut();
+            for p in parties.iter_mut() {
+                let cid = self.client_id;
+                if p.has_player(cid) {
+                    p.handle_bb_subcmd_62(self, m).unwrap();
+                    return
+                }
+            }
+        }
+
+        warn!("Could not find the lobby or party this subcmd was sent by {}.", self.client_id);
+        self.send_fatal_error(self.client_id, "\tEIllegal message");
+    }
+
+    pub fn bb_subcmd_6c(&mut self, m: BbSubCmd6C) {
+        {
+            let lr = self.lobbies.clone();
+            let ref mut lobbies = lr.borrow_mut();
+            for l in lobbies.iter_mut() {
+                let cid = self.client_id;
+                if l.has_player(cid) {
+                    l.handle_bb_subcmd_6c(self, m).unwrap();
+                    return
+                }
+            }
+        }
+        {
+            let pr = self.parties.clone();
+            let ref mut parties = pr.borrow_mut();
+            for p in parties.iter_mut() {
+                let cid = self.client_id;
+                if p.has_player(cid) {
+                    p.handle_bb_subcmd_6c(self, m).unwrap();
+                    return
+                }
+            }
+        }
+
+        warn!("Could not find the lobby or party this subcmd was sent by {}.", self.client_id);
+        self.send_fatal_error(self.client_id, "\tEIllegal message");
+    }
+
+    pub fn bb_subcmd_6d(&mut self, m: BbSubCmd6D) {
+        {
+            let lr = self.lobbies.clone();
+            let ref mut lobbies = lr.borrow_mut();
+            for l in lobbies.iter_mut() {
+                let cid = self.client_id;
+                if l.has_player(cid) {
+                    l.handle_bb_subcmd_6d(self, m).unwrap();
+                    return
+                }
+            }
+        }
+        {
+            let pr = self.parties.clone();
+            let ref mut parties = pr.borrow_mut();
+            for p in parties.iter_mut() {
+                let cid = self.client_id;
+                if p.has_player(cid) {
+                    p.handle_bb_subcmd_6d(self, m).unwrap();
+                    return
+                }
+            }
+        }
+
+        warn!("Could not find the lobby or party this subcmd was sent by {}.", self.client_id);
+        self.send_fatal_error(self.client_id, "\tEIllegal message");
     }
 
     pub fn bb_lobby_change(&mut self, m: LobbyChange) {
@@ -338,5 +456,90 @@ impl BlockHandler {
             }
         }
         lobbies[m.1 as usize-1].add_player(self, cid).unwrap();
+    }
+
+    pub fn bb_game_name(&mut self) {
+        let pr = self.parties.clone();
+        let ref mut parties = pr.borrow_mut();
+        for p in parties.iter_mut() {
+            if p.has_player(self.client_id) {
+                p.handle_bb_game_name(self).unwrap();
+                return
+            }
+        }
+        warn!("Client {} requested party name when they weren't in a party.", self.client_id);
+        self.send_fatal_error(self.client_id, "\tEIllegal message.");
+        return
+    }
+
+    pub fn bb_game_list(&mut self) {
+        let mut games = Vec::new();
+        let pr = self.parties.clone();
+        let ref mut parties = pr.borrow_mut();
+
+        let mut game = BbGameListEntry::default();
+        game.menu_id = MENU_GAME_LIST;
+        game.item_id = 0xFFFFFFFF;
+        game.flags = 0x4;
+        games.push(game);
+
+        for (i, p) in parties.iter().enumerate() {
+            let mut game = BbGameListEntry::default();
+            game.menu_id = MENU_GAME_LIST;
+            game.item_id = i as u32;
+            game.name = p.name.clone();
+            game.episode = (4 << 4) | p.episode;
+            game.difficulty = 0x22 + p.difficulty;
+            game.players = p.num_players() as u8;
+            if p.password.is_some() {
+                game.flags |= 0x2;
+            }
+            if p.battle {
+                game.flags |= 0x10;
+            }
+            if p.challenge {
+                game.flags |= 0x20;
+            }
+            if p.single_player {
+                game.flags |= 0x4;
+            }
+            games.push(game);
+        }
+        let m: Message = Message::BbGameList(games.len() as u32 - 1, BbGameList { games: games });
+        self.send_to_client(self.client_id, m);
+    }
+
+    pub fn bb_player_leave_game(&mut self, _m: BbPlayerLeaveGame) {
+        let pr = self.parties.clone();
+        let ref mut parties = pr.borrow_mut();
+        let mut removed = 0;
+        let mut party_index = 0;
+        for (i, p) in parties.iter_mut().enumerate() {
+            if p.has_player(self.client_id) {
+                let cid = self.client_id;
+                if p.remove_player(self, cid).unwrap() {
+                    // remove the party
+                    party_index = i;
+                    removed = 2;
+                    break;
+                }
+                removed = 1;
+                break;
+            }
+        }
+        match removed {
+            1 => {
+                // party will live on
+            },
+            2 => {
+                // party is empty; remove now
+                parties.remove(party_index);
+            },
+            _ => {
+                warn!("Client {} was not in a game and tried to leave one", self.client_id);
+                self.send_fatal_error(self.client_id, "\tEIllegal message");
+            }
+        }
+
     }
 }

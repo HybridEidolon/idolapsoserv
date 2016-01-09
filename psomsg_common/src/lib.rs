@@ -265,3 +265,5 @@ impl Serial for ShipListItem {
 }
 
 derive_serial!(Ping);
+
+derive_serial!(DoneBursting);

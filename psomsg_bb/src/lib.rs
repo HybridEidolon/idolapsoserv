@@ -26,6 +26,7 @@ pub mod chara;
 pub mod lobby;
 pub mod player;
 pub mod subcmd;
+pub mod game;
 
 pub use self::msgs::*;
 pub use psomsg_common::*;
@@ -34,6 +35,7 @@ pub use self::chara::*;
 pub use self::lobby::*;
 pub use self::player::*;
 pub use self::subcmd::*;
+pub use self::game::*;
 
 macro_rules! gen_message_enum {
     ($($id:expr => $name:ident),*) => {
@@ -156,20 +158,29 @@ gen_message_enum! {
     0x0005 => Goodbye,
     0x0006 => BbChat,
     0x0007 => BlockList,
+    0x0008 => BbGameList,
     0x0010 => MenuSelect,
     0x0011 => BbInfoReply,
     0x0019 => Redirect,
     0x0060 => BbSubCmd60,
     0x0061 => BbCharDat,
+    0x0062 => BbSubCmd62,
     0x0064 => BbGameJoin,
+    0x0065 => BbGameAddMember,
+    0x0066 => BbGameLeave,
     0x0067 => LobbyJoin,
     0x0068 => LobbyAddMember,
     0x0069 => LobbyLeave,
+    0x006C => BbSubCmd6C,
+    0x006D => BbSubCmd6D,
+    0x006F => DoneBursting,
     0x0083 => LobbyList,
     0x0084 => LobbyChange,
     0x0088 => LobbyArrowList,
+    0x008A => BbGameName,
     0x0093 => BbLogin,
     0x0095 => CharDataRequest,
+    0x0098 => BbPlayerLeaveGame,
     0x001A => LargeMsg,
     0x001D => Ping,
     0x00A0 => ShipList,

@@ -27,10 +27,12 @@ use ::loop_handler::LoopMsg;
 pub mod client;
 pub mod handler;
 pub mod lobbyhandler;
+pub mod partyhandler;
 
 use self::handler::BlockHandler;
 use self::client::ClientState;
 use self::lobbyhandler::Lobby;
+use self::partyhandler::Party;
 
 pub struct BlockService {
     receiver: Receiver<ServiceMsg>,
@@ -38,6 +40,7 @@ pub struct BlockService {
     sg_sender: SgCbMgr<BlockHandler>,
     clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
     lobbies: Rc<RefCell<Vec<Lobby>>>,
+    parties: Rc<RefCell<Vec<Party>>>,
     block_num: u16,
     event: u16
 }
@@ -62,6 +65,7 @@ impl BlockService {
                 sg_sender: sg_sender.into(),
                 clients: Default::default(),
                 lobbies: Default::default(),
+                parties: Default::default(),
                 block_num: block_num,
                 event: event
             };
@@ -77,7 +81,8 @@ impl BlockService {
             self.sg_sender.clone(),
             client_id,
             self.clients.clone(),
-            self.lobbies.clone()
+            self.lobbies.clone(),
+            self.parties.clone()
         )
     }
 
@@ -146,7 +151,13 @@ impl BlockService {
                         Message::BbChat(_, m) => { h.bb_chat(m) },
                         Message::BbCreateGame(_, m) => { h.bb_create_game(m) },
                         Message::BbSubCmd60(_, m) => { h.bb_subcmd_60(m) },
+                        Message::BbSubCmd62(_, m) => { h.bb_subcmd_62(m) },
+                        Message::BbSubCmd6C(_, m) => { h.bb_subcmd_6c(m) },
+                        Message::BbSubCmd6D(_, m) => { h.bb_subcmd_6d(m) },
                         Message::LobbyChange(_, m) => { h.bb_lobby_change(m) },
+                        Message::BbGameName(_, _) => { h.bb_game_name() },
+                        Message::BbGameList(_, _) => { h.bb_game_list() },
+                        Message::BbPlayerLeaveGame(_, m) => { h.bb_player_leave_game(m) },
                         a => {
                             info!("{:?}", a);
                         }

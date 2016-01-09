@@ -242,9 +242,32 @@ impl Lobby {
     pub fn block_num(&self) -> u16 { self.block_num }
 
     /// Sets the event and reloads all clients.
-    pub fn set_event_reload(&mut self, _handler: &mut BlockHandler, event: u16) -> Result<(), LobbyError> {
+    pub fn set_event_reload(&mut self, handler: &mut BlockHandler, event: u16) -> Result<(), LobbyError> {
         self.event = event;
         error!("Reloading after setting event is not implemented! We won't panic over it though.\n at {}:{}", file!(), line!());
+        let cid = handler.client_id;
+        handler.send_error(cid, "\tEPlease re-enter the\nlobby to see the\nnew event.");
+        Ok(())
+    }
+
+    pub fn handle_bb_subcmd_60(&mut self, handler: &mut BlockHandler, m: BbSubCmd60) -> Result<(), LobbyError> {
+        // We'll eventually do more on this.
+        let cid = handler.client_id;
+        self.bb_broadcast(handler, Some(cid), m.into())
+    }
+
+    pub fn handle_bb_subcmd_62(&mut self, _handler: &mut BlockHandler, _m: BbSubCmd62) -> Result<(), LobbyError> {
+        // This we do NOT propagate.
+        Ok(())
+    }
+
+    pub fn handle_bb_subcmd_6c(&mut self, handler: &mut BlockHandler, m: BbSubCmd6C) -> Result<(), LobbyError> {
+        let cid = handler.client_id;
+        self.bb_broadcast(handler, Some(cid), m.into())
+    }
+
+    pub fn handle_bb_subcmd_6d(&mut self, _handler: &mut BlockHandler, _m: BbSubCmd6D) -> Result<(), LobbyError> {
+        // This we do NOT propagate.
         Ok(())
     }
 

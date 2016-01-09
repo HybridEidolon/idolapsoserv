@@ -58,10 +58,7 @@ pub fn read_utf16(src: &mut Read) -> io::Result<String> {
     // Keep reading until EOF
     loop {
         let mut r_buf = [0u8; 2];
-        // God damn it
-        // This will only work if the stream ends (i.e. using a Cursor)
-        // It will block on a raw network stream...
-        let bytes_read = try!(src.read(&mut r_buf[..]));
+        let bytes_read = try!(src.read(&mut r_buf));
         if bytes_read != 2 {
             break;
         }
@@ -70,6 +67,10 @@ pub fn read_utf16(src: &mut Read) -> io::Result<String> {
         }
         buf.push(r_buf[0]);
         buf.push(r_buf[1]);
+    }
+
+    if buf.len() == 0 {
+        return Ok("".to_string())
     }
 
     let r = match UTF_16LE.decode(&buf[..], Replace) {
@@ -113,6 +114,9 @@ pub fn read_utf16_len(len: usize, src: &mut Read) -> io::Result<String> {
         } else {
             nulls = 0;
         }
+    }
+    if end == 1 {
+        return Ok("".to_string())
     }
     match UTF_16LE.decode(&r[..end], Replace) {
         Ok(s) => Ok(s),
