@@ -6,3 +6,6 @@ patch_config.toml
 monolith_config.toml
 
 idola.toml
+
+*.swp
+

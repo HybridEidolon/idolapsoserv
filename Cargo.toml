@@ -24,21 +24,3 @@ docopt = "0.6"
 crc = "1.2"
 mio = "0.5"
 
-# [[bin]]
-# name = "idola_patch"
-#
-# [[bin]]
-# name = "idola_login"
-#
-# [[bin]]
-# name = "idola_ship"
-#
-# [[bin]]
-# name = "idola_data"
-#
-# [[bin]]
-# name = "idola_monolith"
-
-# [[bin]]
-# name = "idola_pat"
-# path = "src/bin/idola_pat/main.rs"
