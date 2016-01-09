@@ -220,6 +220,20 @@ impl Serial for MenuSelect {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct LobbyChange(pub u32, pub u32);
+impl Serial for LobbyChange {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.0.serialize(dst));
+        try!(self.1.serialize(dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        Ok(LobbyChange(try!(u32::deserialize(src)), try!(u32::deserialize(src))))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ShipListItem {
     pub menu_id: u32,

@@ -31,7 +31,7 @@ impl<H> SgCbMgr<H> {
         {
             Ok(req) => {
                 self.callbacks.borrow_mut().insert(req, (cid, Box::new(cb)));
-                info!("ShipGate request sent with ID {}", req);
+                debug!("ShipGate request sent with ID {}", req);
                 Ok(())
             },
             Err(e) => Err(e)

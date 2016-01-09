@@ -26,22 +26,29 @@ use ::loop_handler::LoopMsg;
 
 pub mod client;
 pub mod handler;
+pub mod lobbyhandler;
 
 use self::handler::BlockHandler;
 use self::client::ClientState;
+use self::lobbyhandler::Lobby;
 
 pub struct BlockService {
     receiver: Receiver<ServiceMsg>,
     sender: Sender<LoopMsg>,
     sg_sender: SgCbMgr<BlockHandler>,
-    clients: Rc<RefCell<HashMap<usize, ClientState>>>
+    clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
+    lobbies: Rc<RefCell<Vec<Lobby>>>,
+    block_num: u16,
+    event: u16
 }
 
 impl BlockService {
     pub fn spawn(bind: &SocketAddr,
                  sender: Sender<LoopMsg>,
                  sg_sender: &SgSender,
-                 key_table: Arc<Vec<u32>>) -> Service {
+                 key_table: Arc<Vec<u32>>,
+                 block_num: u16,
+                 event: u16) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -53,7 +60,10 @@ impl BlockService {
                 receiver: rx,
                 sender: sender,
                 sg_sender: sg_sender.into(),
-                clients: Default::default()
+                clients: Default::default(),
+                lobbies: Default::default(),
+                block_num: block_num,
+                event: event
             };
             d.run();
         });
@@ -66,12 +76,25 @@ impl BlockService {
             self.sender.clone(),
             self.sg_sender.clone(),
             client_id,
-            self.clients.clone()
+            self.clients.clone(),
+            self.lobbies.clone()
         )
+    }
+
+    fn init_lobbies(&mut self) {
+        let ref mut l = self.lobbies.borrow_mut();
+        for i in 0..15 {
+            let lobby = Lobby::new(i, self.block_num, self.event);
+            l.push(lobby);
+        }
+        info!("Initialized 15 lobbies with event {}", self.event);
     }
 
     pub fn run(mut self) {
         info!("Block service running");
+
+        // Initialize lobbies
+        self.init_lobbies();
 
         loop {
             let msg = match self.receiver.recv() {
@@ -87,11 +110,32 @@ impl BlockService {
                     self.sender.send((id, Message::BbWelcome(0, BbWelcome(sk, ck))).into()).unwrap();
 
                     // Add to clients table
-                    let cs = ClientState::default();
+                    let cs = Rc::new(RefCell::new(ClientState::default()));
+                    {
+                        let ref mut borrow = cs.borrow_mut();
+                        borrow.connection_id = id;
+                    }
                     {self.clients.borrow_mut().insert(id, cs);}
                 },
                 ServiceMsg::ClientDisconnected(id) => {
                     info!("Client {} disconnected from block", id);
+
+                    let mut h = self.make_handler(id);
+
+                    // First, we need to check if they're in a lobby or party.
+                    {
+                        let lr = self.lobbies.clone();
+                        let ref mut lobbies = lr.borrow_mut();
+                        for l in lobbies.iter_mut() {
+                            if l.has_player(id) {
+                                l.remove_player(&mut h, id).unwrap();
+                                break
+                            }
+                        }
+                    }
+
+                    drop(h);
+
                     {self.clients.borrow_mut().remove(&id);}
                 },
                 ServiceMsg::ClientSaid(id, NetMsg::Bb(m)) => {
@@ -101,6 +145,8 @@ impl BlockService {
                         Message::BbCharDat(_, m) => { h.bb_char_dat(m) },
                         Message::BbChat(_, m) => { h.bb_chat(m) },
                         Message::BbCreateGame(_, m) => { h.bb_create_game(m) },
+                        Message::BbSubCmd60(_, m) => { h.bb_subcmd_60(m) },
+                        Message::LobbyChange(_, m) => { h.bb_lobby_change(m) },
                         a => {
                             info!("{:?}", a);
                         }
@@ -108,7 +154,7 @@ impl BlockService {
                 },
                 ServiceMsg::ShipGateMsg(m) => {
                     let req = m.get_response_key();
-                    info!("Shipgate Request {}: Response received", req);
+                    debug!("Shipgate Request {}: Response received", req);
                     let cb;
                     {
                         cb = self.sg_sender.cb_for_req(req)

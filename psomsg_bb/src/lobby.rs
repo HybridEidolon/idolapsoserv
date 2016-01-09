@@ -130,11 +130,20 @@ impl Default for LobbyMember {
     }
 }
 
+derive_serial! {
+    LobbyLeave {
+        pub client_id: u8,
+        pub leader_id: u8,
+        pub padding: u16
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use std::io::Cursor;
     use psoserial::Serial;
+
     #[test]
     fn test_lobby_join_size() {
         let l = LobbyJoin::default();
@@ -147,5 +156,14 @@ mod test {
         let mut c = Cursor::new(Vec::new());
         l.serialize(&mut c).unwrap();
         assert_eq!(c.position(), 1324);
+    }
+
+    #[test]
+    fn test_lobby_leave_size() {
+        let l = LobbyLeave::default();
+        let mut c = Cursor::new(Vec::new());
+        l.serialize(&mut c).unwrap();
+        // this message is padded
+        assert_eq!(c.position(), 0xC + 4);
     }
 }

@@ -41,7 +41,9 @@ pub enum ServiceConf {
         blocks: Vec<BlockConf>
     },
     Block {
-        bind: SocketAddr
+        bind: SocketAddr,
+        num: u16,
+        event: u16
     },
     ShipGate {
         bind: SocketAddr,
@@ -216,8 +218,12 @@ impl ServiceConf {
                         })
                     },
                     "block" => {
+                        let num = t.get("num").and_then(|v| v.as_integer()).map(|v| v as u16).unwrap_or(1);
+                        let event = t.get("event").and_then(|v| v.as_integer()).map(|v| v as u16).unwrap_or(0);
                         Ok(ServiceConf::Block {
-                            bind: bind
+                            bind: bind,
+                            num: num,
+                            event: event
                         })
                     },
                     "shipgate" => {

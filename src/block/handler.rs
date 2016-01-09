@@ -15,25 +15,55 @@ use ::shipgate::msg::BbLoginChallenge;
 use ::shipgate::msg::BbGetAccountInfo;
 
 use super::client::ClientState;
+use super::lobbyhandler::Lobby;
 
 pub struct BlockHandler {
     sender: Sender<LoopMsg>,
     sg_sender: SgCbMgr<BlockHandler>,
     client_id: usize,
-    clients: Rc<RefCell<HashMap<usize, ClientState>>>
+    clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
+    lobbies: Rc<RefCell<Vec<Lobby>>>
 }
 
 impl BlockHandler {
     pub fn new(sender: Sender<LoopMsg>,
                sg_sender: SgCbMgr<BlockHandler>,
                client_id: usize,
-               clients: Rc<RefCell<HashMap<usize, ClientState>>>) -> BlockHandler {
+               clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
+               lobbies: Rc<RefCell<Vec<Lobby>>>) -> BlockHandler {
         BlockHandler {
             sender: sender,
             sg_sender: sg_sender,
             client_id: client_id,
-            clients: clients
+            clients: clients,
+            lobbies: lobbies
         }
+    }
+
+    /// Get the client state for the given client ID. Be smart with RefCell borrows,
+    /// the program will panic if you fail the borrow invariant checks (basically,
+    /// don't borrow mutably unless you have to).
+    pub fn get_client_state(&self, client: usize) -> Option<Rc<RefCell<ClientState>>> {
+        self.clients.borrow().get(&client).map(|v| v.clone())
+    }
+
+    /// Send a message to a client.
+    pub fn send_to_client(&self, client: usize, message: Message) {
+        // no support for versions other than BB yet...
+        self.sender.send((client, message.clone()).into()).unwrap();
+    }
+
+    /// Send a message and disconnect the client.
+    pub fn send_fatal_error(&self, client: usize, msg: &str) {
+        let m = Message::LargeMsg(0, LargeMsg(msg.to_string()));
+        self.send_to_client(client, m);
+        self.sender.send(LoopMsg::DropClient(client)).unwrap();
+    }
+
+    /// Send a non-fatal Msg1 to the client.
+    pub fn send_error(&self, client: usize, msg: &str) {
+        let m = Message::BbMsg1(0, BbMsg1(msg.to_string()));
+        self.send_to_client(client, m);
     }
 
     pub fn bb_login(&mut self, m: BbLogin) {
@@ -81,8 +111,8 @@ impl BlockHandler {
                         });
                         h.sender.send((h.client_id, r).into()).unwrap();
 
-                        let mut b = h.clients.borrow_mut();
-                        let ref mut c = b.get_mut(&h.client_id).unwrap();
+                        let cr = h.get_client_state(h.client_id).unwrap();
+                        let ref mut c = cr.borrow_mut();
                         c.sec_data = sec_data.clone();
                         c.team_id = a.team_id;
                         c.bb_guildcard = a.guildcard_num;
@@ -112,41 +142,28 @@ impl BlockHandler {
                             }
                             // fc = ::util::nsc::read_nsc(&mut File::open("data/default/default_0.nsc").unwrap(), CharClass::HUmar).unwrap();
                             fc = BbFullCharData::default();
-                            // {
-                            //     use std::fs::File;
-                            //     use psoserial::Serial;
-                            //     let mut file = File::open("character.bin").unwrap();
-                            //     if let Message::BbFullChar(_, BbFullChar(cha)) = Serial::deserialize(&mut file).unwrap() {
-                            //         fc = cha;
-                            //     } else {
-                            //         info!("had to default");
-                            //         fc = Default::default();
-                            //     }
-                            //     info!("{:?}", fc);
-                            // }
-                            // monomates in their inventory
-                            // fc.inv.item_count = 255;
-                            // fc.inv.hp_mats = 255;
-                            // fc.inv.tp_mats = 255;
+                            fc.inv.item_count = 2;
+                            fc.inv.hp_mats = 255;
+                            fc.inv.tp_mats = 255;
                             // fc.inv.lang = 255;
-                            // for item in fc.inv.items.iter_mut() {
-                            //     item.exists = 0xFF00;
-                            //     item.data.item_id = 0xFFFFFFFF;
-                            // }
-                            // for item in fc.bank.items.iter_mut() {
-                            //     item.data.item_id = 0xFFFFFFFF;
-                            // }
+                            for item in fc.inv.items.iter_mut() {
+                                item.exists = 0xFF00;
+                                item.data.item_id = 0xFFFFFFFF;
+                            }
+                            for item in fc.bank.items.iter_mut() {
+                                item.data.item_id = 0xFFFFFFFF;
+                            }
                             // fc.inv.hp_mats = 255;
                             // fc.inv.tp_mats = 127;
-                            // fc.inv.items[0].exists = 0x01;
-                            // fc.inv.items[0].flags = 0;
-                            // fc.inv.items[0].data.data[1] = 0x01;
-                            // fc.inv.items[0].data.item_id = 0x00010000;
-                            //
-                            // fc.inv.items[1].exists = 0x01;
-                            // fc.inv.items[1].flags = 0;
-                            // fc.inv.items[1].data.data[1] = 0x01;
-                            // fc.inv.items[1].data.item_id = 0x00010001;
+                            fc.inv.items[0].exists = 0x01;
+                            fc.inv.items[0].flags = 0x8;
+                            fc.inv.items[0].data.data[1] = 0x01;
+                            fc.inv.items[0].data.item_id = 0x00010000;
+
+                            fc.inv.items[1].exists = 0x01;
+                            fc.inv.items[1].flags = 0;
+                            fc.inv.items[1].data.data[1] = 0x01;
+                            fc.inv.items[1].data.item_id = 0x00010001;
 
                             fc.name = "Rico".to_string();
                             fc.chara.name = "Rico".to_string();
@@ -157,9 +174,15 @@ impl BlockHandler {
                             fc.key_config.team_id = 0;
                             // fc.key_config.team_name = fc.team_name.clone();
                             // fc.key_config.guildcard = a.guildcard_num;
-                            fc.key_config.team_rewards = 0xFFFFFFFF;
-                            fc.chara.level = 199;
-                            fc.chara.stats.hp = 100;
+                            //fc.key_config.team_rewards = 0xFFFFFFFF;
+                            // fc.chara.level = 199;
+                            fc.chara.stats.hp = 3000;
+                            fc.chara.stats.atp = 3000;
+                            fc.chara.stats.dfp = 3000;
+                            fc.chara.stats.evp = 3000;
+                            fc.chara.stats.ata = 3000;
+                            fc.chara.stats.mst = 3000;
+                            fc.chara.stats.lck = 3000;
                             fc.section = 3;
                             fc.class = 1;
                             fc.chara.section = 3;
@@ -198,64 +221,66 @@ impl BlockHandler {
     }
 
     pub fn bb_char_dat(&mut self, _m: BbCharDat) {
-        info!("Client {} is joining lobby 1 <TODO>", self.client_id);
+        // They are joining a lobby now. Find an empty lobby.
+        let lr = self.lobbies.clone();
+        let ref mut lobbies = lr.borrow_mut();
 
-        let mut b = self.clients.borrow_mut();
-        let c = b.get_mut(&self.client_id).unwrap();
-        let fc;
-        if let Some(ref fce) = c.full_char {
-            fc = fce.clone();
-        } else {
-            return
+        for l in lobbies.iter_mut() {
+            if !l.is_full() {
+                let cid = self.client_id;
+                l.add_player(self, cid).unwrap();
+                return
+            }
         }
 
-        let mut l = LobbyJoin::default();
-        l.client_id = 0;
-        l.leader_id = 1;
-        l.one = 1;
-        l.lobby_num = 0;
-        l.block_num = 1;
-        l.event = 12;
-        let mut lm = LobbyMember::default();
-        lm.hdr.guildcard = c.bb_guildcard;
-        lm.hdr.tag = 0x00010000;
-        lm.hdr.client_id = 0;
-        lm.hdr.name = fc.name.clone();
-        lm.data = fc.chara.clone();
-        lm.inventory = fc.inv.clone();
-        for item in lm.inventory.items.iter_mut() {
-            item.data.item_id |= 0x10000000;
-        }
-        l.members.push(lm);
-
-        //Message::LobbyArrowList(0, LobbyArrowList(Vec::new())).serialize(&mut w).unwrap();
-
-        let r = Message::LobbyJoin(1, l);
-        self.sender.send((self.client_id, r).into()).unwrap();
-
-        // send this player's quest data, don't know why
-        let r = Message::BbSubCmd60(0, BbSubCmd60::QuestData1 {
-            client_id: 0,
-            unused: 0,
-            data: QuestData1(fc.quest_data1.clone())
-        });
-        self.sender.send((self.client_id, r).into()).unwrap();
+        info!("Unable to add client {} to a lobby because they're all full.", self.client_id);
+        self.send_fatal_error(self.client_id, "All lobbies on this block are full. Please try again.");
     }
 
-    pub fn bb_chat(&mut self, m: BbChat) {
-        // TODO propogate
-        let BbChat(gc, text) = m;
-        info!("{}: {}", gc, text);
-        let mut b = self.clients.borrow_mut();
-        let c = b.get_mut(&self.client_id).unwrap();
-        let message: Message = BbChat(c.bb_guildcard, text).into();
-        self.sender.send((self.client_id, message).into()).unwrap();
+    pub fn bb_chat(&mut self, mut m: BbChat) {
+        let gc_num;
+        let player_name;
+
+        {
+            let cr = self.get_client_state(self.client_id).unwrap();
+            let ref c = cr.borrow();
+            gc_num = c.bb_guildcard;
+            player_name = c.full_char.as_ref().unwrap().chara.name.clone();
+        }
+        // First, we'll check if they're in a lobby.
+        {
+            let lr = self.lobbies.clone();
+            let ref mut lobbies = lr.borrow_mut();
+            for l in lobbies.iter_mut() {
+                if l.has_player(self.client_id) {
+                    info!("<{}:{}> {}: {}", l.block_num(), l.lobby_num() + 1, player_name, m.1);
+                    m.0 = gc_num;
+                    l.bb_broadcast(self, None, m.into()).unwrap();
+                    return
+                }
+            }
+        }
     }
 
     pub fn bb_create_game(&mut self, m: BbCreateGame) {
         info!("{} creating game {}", self.client_id, m.name);
-        let mut b = self.clients.borrow_mut();
-        let c = b.get_mut(&self.client_id).unwrap();
+
+        // we first want to remove them from their lobby...
+        {
+            let lsr = self.lobbies.clone();
+            let mut lobbies = lsr.borrow_mut();
+            for l in lobbies.iter_mut() {
+                if l.has_player(self.client_id) {
+                    let cid = self.client_id;
+                    l.remove_player(self, cid).unwrap();
+                    break;
+                }
+            }
+        }
+
+        // TODO: parties
+        let cr = self.get_client_state(self.client_id).unwrap();
+        let c = cr.borrow();
 
         let mut l = BbGameJoin::default();
         l.client_id = 0;
@@ -272,5 +297,46 @@ impl BlockHandler {
         l.players.push(ph);
         let r: Message = Message::BbGameJoin(0, l);
         self.sender.send((self.client_id, r).into()).unwrap();
+    }
+
+    pub fn bb_subcmd_60(&mut self, m: BbSubCmd60) {
+        {
+            let lr = self.lobbies.clone();
+            let ref mut lobbies = lr.borrow_mut();
+            for l in lobbies.iter_mut() {
+                let cid = self.client_id;
+                if l.has_player(cid) {
+                    l.bb_broadcast(self, Some(cid), m.into()).unwrap();
+                    return
+                }
+            }
+        }
+    }
+
+    pub fn bb_lobby_change(&mut self, m: LobbyChange) {
+        let lr = self.lobbies.clone();
+        let ref mut lobbies = lr.borrow_mut();
+        // first, check if that lobby isn't full
+        match m.1 {
+            l @ 1 ... 15 => {
+                if lobbies[l as usize-1].is_full() {
+                    self.send_error(self.client_id, "\tELobby is full.");
+                    return
+                }
+            },
+            _ => {
+                warn!("Client {} tried to join an invalid lobby", self.client_id);
+                self.send_fatal_error(self.client_id, "\tEYou tried to join an invalid lobby.\nDisconnected.");
+                return
+            }
+        }
+        let cid = self.client_id;
+        for l in lobbies.iter_mut() {
+            if l.has_player(cid) {
+                l.remove_player(self, cid).unwrap();
+                break
+            }
+        }
+        lobbies[m.1 as usize-1].add_player(self, cid).unwrap();
     }
 }

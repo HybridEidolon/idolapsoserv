@@ -208,7 +208,7 @@ impl BbLoginHandler {
         if cont {
             let size_remaining: usize = 54672 - (chunk as usize * 0x6800);
             let size: usize = if size_remaining < 0x6800 { size_remaining } else { 0x6800 };
-            info!("Sending guild card chunk {} of size {}", chunk, size);
+            debug!("Sending guild card chunk {} of size {}", chunk, size);
             let r = Message::BbGuildCardChunk(0, BbGuildCardChunk {
                 unk: 0,
                 chunk: chunk,
@@ -259,10 +259,10 @@ impl BbLoginHandler {
     pub fn bb_param_chunk_req(&mut self, chunk: u32) {
         let chunks = self.param_files.1.len();
         if let Some(ref a) = self.param_files.1.get(chunk as usize) {
-            info!("Sending param chunk {} of {}", chunk, chunks);
+            debug!("Sending param chunk {} of {}", chunk, chunks);
             self.sender.send((self.client_id, (*a).clone()).into()).unwrap();
         } else {
-            info!("Client requested invalid param chunk.");
+            warn!("Client requested invalid param chunk.");
             let m = Message::LargeMsg(0, LargeMsg("Whoops, you requested a chunk in the param table that doesn't exist.".to_string()));
             self.sender.send((self.client_id, m).into()).unwrap();
         }

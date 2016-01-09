@@ -128,9 +128,9 @@ fn main() {
                 println!("Ship service at {:?}", bind);
                 services.push(ShipService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, name, blocks.clone()));
             },
-            &ServiceConf::Block { ref bind,.. } => {
+            &ServiceConf::Block { ref bind, num, event, .. } => {
                 println!("Block service at {:?}", bind);
-                services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone()));
+                services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone(), num, event));
             },
             &ServiceConf::ShipGate { .. } => {
                 match sg {

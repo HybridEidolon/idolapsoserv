@@ -151,6 +151,7 @@ macro_rules! gen_message_enum {
 }
 
 gen_message_enum! {
+    0x0001 => BbMsg1,
     0x0003 => BbWelcome,
     0x0005 => Goodbye,
     0x0006 => BbChat,
@@ -163,7 +164,9 @@ gen_message_enum! {
     0x0064 => BbGameJoin,
     0x0067 => LobbyJoin,
     0x0068 => LobbyAddMember,
+    0x0069 => LobbyLeave,
     0x0083 => LobbyList,
+    0x0084 => LobbyChange,
     0x0088 => LobbyArrowList,
     0x0093 => BbLogin,
     0x0095 => CharDataRequest,

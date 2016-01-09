@@ -122,7 +122,7 @@ impl ShipGateService {
                             }
                             _ => unimplemented!()
                         };
-                        info!("Client Request {} received from client {}", req, id);
+                        debug!("Client Request {} received from client {}", req, id);
                         response.set_response_key(req);
                         self.sender.send((id, response).into()).unwrap();
                     } else {
@@ -133,13 +133,13 @@ impl ShipGateService {
                                 info!("Shipgate client {} successfully authenticated", id);
                                 continue
                             } else {
-                                info!("Shipgate client {} failed to authenticate", id);
+                                warn!("Shipgate client {} failed to authenticate", id);
                                 self.sender.send(LoopMsg::DropClient(id)).unwrap();
                                 continue
                             }
                         } else {
                             // Client must auth first. Drop immediately.
-                            info!("Shipgate client {} tried to do something other than Auth first", id);
+                            warn!("Shipgate client {} tried to do something other than Auth first", id);
                             self.sender.send(LoopMsg::DropClient(id)).unwrap();
                             continue
                         }

@@ -7,6 +7,4 @@ description = "Structures and parsers for PSO-specific data formats."
 [dependencies]
 psoserial = { path = "../psoserial" }
 byteorder = "0.4"
-
-[[bin]]
-name = "bpedump"
+log = "0.3"

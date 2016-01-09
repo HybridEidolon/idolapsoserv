@@ -15,7 +15,7 @@ pub static DEFAULT_KEYS: &'static [u8] = &[0u8, 0, 0, 0, 38, 0, 0, 0, 0, 0, 0, 0
 // to send the real defaults on login by sending an incomplete options packet.
 pub static DEFAULT_JOY: &'static [u8] = &[0u8, 1, 3, 4, 0, 0, 1, 0, 0, 0, 2, 0,
 0, 0, 4, 0, 0, 0, 8, 0, 1, 0, 0, 0, 2, 0, 0, 0, 4, 0, 0, 0, 8, 0, 0, 0, 128, 0,
-0, 0, 16, 0, 0, 0, 32, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0];
+0, 0, 16, 0, 0, 0, 32, 0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 0];
 
 pub static DEFAULT_SYMBOLCHATS: &'static [u8] = &[
     0x01, 0x00, 0x00, 0x00, 0x09, 0x00, 0x45, 0x00, 0x48, 0x00,

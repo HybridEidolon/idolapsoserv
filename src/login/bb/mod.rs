@@ -127,7 +127,7 @@ impl BbLoginService {
                 },
                 ServiceMsg::ShipGateMsg(m) => {
                     let req = m.get_response_key();
-                    info!("Shipgate Request {}: Response received", req);
+                    debug!("Shipgate Request {}: Response received", req);
                     let cb;
                     {
                         cb = self.sg_sender.cb_for_req(req)

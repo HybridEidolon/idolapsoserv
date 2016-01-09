@@ -137,7 +137,7 @@ impl ShipGateClient {
                 ClientMsg::Recv(m) => {
                     let rk = m.get_response_key();
                     self.responders.get(&rk).map(|r| {
-                        info!("Shipgate request had response callback: {:?}", m);
+                        debug!("Shipgate request had response callback: {:?}", m);
                         r.send(ServiceMsg::ShipGateMsg(m))
                     });
                 }

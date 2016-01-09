@@ -737,6 +737,24 @@ impl Default for BbTeamInfo {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct BbMsg1(pub String);
+impl Serial for BbMsg1 {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(0u32.serialize(dst));
+        try!(0u32.serialize(dst));
+        try!(write_utf16(&self.0, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        try!(u32::deserialize(src));
+        try!(u32::deserialize(src));
+        let msg = try!(read_utf16(src));
+        Ok(BbMsg1(msg))
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BbTeamAndKeyData {
     // uint8_t unk[0x114];

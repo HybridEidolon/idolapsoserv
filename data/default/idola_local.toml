@@ -65,6 +65,9 @@ bind = "127.0.0.1:11001"
 type = "data"
 
 ## Login (Blue Burst) ##
+# The BB login server in IDOLA is also the character server in other
+# implementations. It simply redirects to itself. TODO add a redirect address
+# for external facing IPs
 [[service]]
 bind = "127.0.0.1:12000"
 type = "login"
@@ -72,21 +75,52 @@ type = "login"
 version = "BlueBurst"
 
 ## Ship ##
-# The ship is where all gameplay occurs. In Blue Burst, character information
-# is also served from the ship i.e. all ships are character servers.
+# The ship is where all gameplay occurs.
 [[service]]
 bind = "127.0.0.1:13000"
 type = "ship"
 name = "IDOLA"
   [[service.block]]
-  # The name shown in the block list. It should probably corrospond to the
+  # The name shown in the block list. It should probably correspond to the
   # index in this array.
   name = "BLOCK01"
   addr = "127.0.0.1:13001"
 
-  # [[service.block]]
-  # name = "BLOCK02"
-  # addr = "127.0.0.1:13002"
+  [[service.block]]
+  name = "BLOCK02"
+  addr = "127.0.0.1:13002"
+
+  [[service.block]]
+  name = "BLOCK03"
+  addr = "127.0.0.1:13003"
+
+  [[service.block]]
+  name = "BLOCK04"
+  addr = "127.0.0.1:13004"
+
+  [[service.block]]
+  name = "BLOCK05"
+  addr = "127.0.0.1:13005"
+
+  [[service.block]]
+  name = "BLOCK06"
+  addr = "127.0.0.1:13006"
+
+  [[service.block]]
+  name = "BLOCK07"
+  addr = "127.0.0.1:13007"
+
+  [[service.block]]
+  name = "BLOCK08"
+  addr = "127.0.0.1:13008"
+
+  [[service.block]]
+  name = "BLOCK09"
+  addr = "127.0.0.1:13009"
+
+  [[service.block]]
+  name = "BLOCK10"
+  addr = "127.0.0.1:13010"
 
 ## Block ##
 # Ships normally have 10 distinct "blocks" on which most gameplay actually
@@ -95,6 +129,67 @@ name = "IDOLA"
 [[service]]
 bind = "127.0.0.1:13001"
 type = "block"
+# The block number. Does not strictly need to be ordered like its name in the
+# ship, but it _does_ have to be in the range 1-65535 (maybe?). It is not
+# recommended to use a value other than 1-10.
+num = 1
+# The seasonal event for this block. Invalid events may cause a client crash.
+# A full list of events can be found elsewhere.
+event = 12
+
+[[service]]
+bind = "127.0.0.1:13002"
+type = "block"
+num = 2
+event = 12
+
+[[service]]
+bind = "127.0.0.1:13003"
+type = "block"
+num = 3
+event = 12
+
+[[service]]
+bind = "127.0.0.1:13004"
+type = "block"
+num = 4
+event = 12
+
+[[service]]
+bind = "127.0.0.1:13005"
+type = "block"
+num = 5
+event = 12
+
+[[service]]
+bind = "127.0.0.1:13006"
+type = "block"
+num = 6
+event = 12
+
+[[service]]
+bind = "127.0.0.1:13007"
+type = "block"
+num = 7
+event = 12
+
+[[service]]
+bind = "127.0.0.1:13008"
+type = "block"
+num = 8
+event = 12
+
+[[service]]
+bind = "127.0.0.1:13009"
+type = "block"
+num = 9
+event = 12
+
+[[service]]
+bind = "127.0.0.1:13010"
+type = "block"
+num = 10
+event = 12
 
 ## Shipgate ##
 # The shipgate is a special service. Rather than clients connecting to it, the
