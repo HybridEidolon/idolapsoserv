@@ -5,6 +5,8 @@ extern crate psoserial;
 #[macro_use] extern crate log;
 
 pub mod battleparam;
+pub mod leveltable;
+pub mod map;
 pub mod prs;
 pub mod gsl;
 

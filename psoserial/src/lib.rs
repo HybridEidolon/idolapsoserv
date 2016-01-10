@@ -1,10 +1,14 @@
 //! Trait for serializing types into `Read`/`Write` streams.
 
 extern crate byteorder;
+#[macro_use] extern crate log;
+extern crate encoding;
 
 use std::io;
 use std::io::{Read, Write};
 use std::net::Ipv4Addr;
+
+pub mod util;
 
 use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
 
@@ -41,7 +45,53 @@ macro_rules! derive_serial {
         }
     };
     ($name:ident) => {
-        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+        #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+        pub struct $name;
+        impl Serial for $name {
+            fn serialize(&self, _: &mut Write) -> io::Result<()> {
+                Ok(())
+            }
+            fn deserialize(_: &mut Read) -> io::Result<Self> {
+                Ok($name)
+            }
+        }
+    }
+}
+
+#[macro_export]
+/// Same as `derive_serial` but also deriving Default.
+macro_rules! derive_serial_default {
+    ($name:ident {$(pub $fname:ident: $fty:ty),+}) => {
+        #[derive(Debug, Default)]
+        pub struct $name {
+            $(pub $fname: $fty),*
+        }
+
+        // because typenum doesn't implement it...
+        impl Clone for $name {
+            fn clone(&self) -> Self {
+                $name {
+                    $($fname: self.$fname.clone()),*
+                }
+            }
+        }
+
+        impl Serial for $name {
+            fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+                $(try!(self.$fname.serialize(dst));)*
+                Ok(())
+            }
+
+            fn deserialize(src: &mut Read) -> io::Result<Self> {
+                $(let $fname = try!(<$fty as Serial>::deserialize(src));)*
+                Ok($name {
+                    $($fname: $fname),*
+                })
+            }
+        }
+    };
+    ($name:ident) => {
+        #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
         pub struct $name;
         impl Serial for $name {
             fn serialize(&self, _: &mut Write) -> io::Result<()> {
