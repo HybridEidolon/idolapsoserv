@@ -7,6 +7,8 @@ use mio::Sender;
 
 use psomsg::bb::*;
 
+use psodata::battleparam::BattleParamTables;
+
 //use ::game::CharClass;
 use ::shipgate::client::callbacks::SgCbMgr;
 use ::loop_handler::LoopMsg;
@@ -26,7 +28,8 @@ pub struct BlockHandler {
     pub client_id: usize,
     clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
     lobbies: Rc<RefCell<Vec<Lobby>>>,
-    parties: Rc<RefCell<Vec<Party>>>
+    parties: Rc<RefCell<Vec<Party>>>,
+    pub battle_params: Rc<BattleParamTables>
 }
 
 impl BlockHandler {
@@ -35,14 +38,16 @@ impl BlockHandler {
                client_id: usize,
                clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
                lobbies: Rc<RefCell<Vec<Lobby>>>,
-               parties: Rc<RefCell<Vec<Party>>>) -> BlockHandler {
+               parties: Rc<RefCell<Vec<Party>>>,
+               battle_params: Rc<BattleParamTables>) -> BlockHandler {
         BlockHandler {
             sender: sender,
             sg_sender: sg_sender,
             client_id: client_id,
             clients: clients,
             lobbies: lobbies,
-            parties: parties
+            parties: parties,
+            battle_params: battle_params
         }
     }
 

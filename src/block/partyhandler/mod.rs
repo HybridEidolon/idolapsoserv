@@ -56,26 +56,7 @@ impl Party {
     }
 
     pub fn add_player(&mut self, handler: &mut BlockHandler, player: usize) -> Result<(), PartyError> {
-        // let cr = self.get_client_state(self.client_id).unwrap();
-        // let c = cr.borrow();
-        //
-        // let mut l = BbGameJoin::default();
-        // l.client_id = 0;
-        // l.leader_id = 0;
-        // l.one = 1;
-        // l.one2 = 1;
-        // l.difficulty = m.difficulty;
-        // l.episode = m.episode;
-        // let mut ph = PlayerHdr::default();
-        // ph.tag = 0x00010000;
-        // ph.guildcard = c.bb_guildcard;
-        // ph.client_id = 0;
-        // ph.name = c.full_char.as_ref().unwrap().name.clone();
-        // l.players.push(ph);
-        // let r: Message = Message::BbGameJoin(0, l);
-        // self.sender.send((self.client_id, r).into()).unwrap();
-
-        info!("Adding client {} to party {}", player, self.name);
+        info!("Adding client {} to party \"{}\"", player, &self.name[2..]);
 
         let cr = handler.get_client_state(player).unwrap();
         let c = cr.borrow();
@@ -207,10 +188,21 @@ impl Party {
         Ok(())
     }
 
-    pub fn handle_bb_60_req_exp(&mut self, handler: &mut BlockHandler, _m: Bb60ReqExp) {
-        // TODO actual exp from BattleParamEntry
+    pub fn handle_bb_60_req_exp(&mut self, handler: &mut BlockHandler, m: Bb60ReqExp) {
+        info!("Request exp: {:?}", m);
         let cid = handler.client_id;
         handler.send_to_client(cid, Message::BbSubCmd60(0, BbSubCmd60::Bb60GiveExp { client_id: 0, unused: 0, data: Bb60GiveExp(25) }));
+        // send a level up as a test
+        let mut lup: Bb60LevelUp = Bb60LevelUp::default();
+        {
+            let cr = handler.get_client_state(cid).unwrap();
+            let ref mut c = cr.borrow_mut();
+            if let Some(ref mut ch) = c.full_char {
+                ch.chara.level += 1;
+                lup.level = ch.chara.level;
+            }
+        }
+        handler.send_to_client(cid, Message::BbSubCmd60(0, BbSubCmd60::Bb60LevelUp { client_id: 0, unused: 0, data: lup }));
     }
 
     fn find_first_player_not_matching(&self, player: usize) -> Option<(u8, usize)> {

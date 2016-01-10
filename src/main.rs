@@ -130,7 +130,7 @@ fn main() {
             },
             &ServiceConf::Block { ref bind, num, event, .. } => {
                 println!("Block service at {:?}", bind);
-                services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone(), num, event));
+                services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone(), num, event, &config.data_path));
             },
             &ServiceConf::ShipGate { .. } => {
                 match sg {

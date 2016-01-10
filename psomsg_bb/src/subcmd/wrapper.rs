@@ -95,12 +95,14 @@ macro_rules! impl_subcmd_enum {
 }
 
 impl_subcmd_enum! { BbSubCmd60 =
+    0x30 => Bb60LevelUp,
     0x6F => QuestData1,
     0xBF => Bb60GiveExp,
     0xC8 => Bb60ReqExp
 }
 
 impl_subcmd_enum! { BbSubCmd6C =
+    0x30 => Bb60LevelUp,
     0x6F => QuestData1,
     0xBF => Bb60GiveExp,
     0xC8 => Bb60ReqExp

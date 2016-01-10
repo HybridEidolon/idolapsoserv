@@ -77,3 +77,46 @@ impl Serial for Bb60ReqExp {
         })
     }
 }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Bb60LevelUp {
+    pub atp: u16,
+    pub mst: u16,
+    pub evp: u16,
+    pub hp: u16,
+    pub dfp: u16,
+    pub ata: u16,
+    pub level: u32
+}
+impl Serial for Bb60LevelUp {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.atp.serialize(dst));
+        try!(self.mst.serialize(dst));
+        try!(self.evp.serialize(dst));
+        try!(self.hp.serialize(dst));
+        try!(self.dfp.serialize(dst));
+        try!(self.ata.serialize(dst));
+        try!(self.level.serialize(dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let atp = try!(Serial::deserialize(src));
+        let mst = try!(Serial::deserialize(src));
+        let evp = try!(Serial::deserialize(src));
+        let hp = try!(Serial::deserialize(src));
+        let dfp = try!(Serial::deserialize(src));
+        let ata = try!(Serial::deserialize(src));
+        let level = try!(Serial::deserialize(src));
+        Ok(Bb60LevelUp {
+            atp: atp,
+            mst: mst,
+            evp: evp,
+            hp: hp,
+            dfp: dfp,
+            ata: ata,
+            level: level
+        })
+    }
+}
+
