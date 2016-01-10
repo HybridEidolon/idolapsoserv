@@ -7,9 +7,9 @@ Usage:
     idola --version
 
 Options:
-    --config=<config>        Config path [default: idola.toml].
-    -h,--help                This message.
-    --version                Print version.
+    -c <config>, --config=<config>        Config path [default: idola.toml].
+    -h,--help                             This message.
+    --version                             Print version.
 
 The config path defaults to 'idola.toml'. If no file exists, the program
 will immediately exit.
