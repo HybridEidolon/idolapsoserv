@@ -1,6 +1,6 @@
 //! Map files for Blue Burst.
 
-use std::io::{Read, Write};
+use std::io::{Read, Write, Seek, SeekFrom};
 use std::io;
 
 use psoserial::Serial;
@@ -143,15 +143,38 @@ impl Default for MapObject {
     }
 }
 
-// Read a `Read` fully, parsing out all enemy structures.
-// pub fn read_map_enemies<R: Read + Seek>(mut r: R) -> io::Result<Vec<MapEnemy>> {
-//     try!(r.seek(SeekFrom::Start(0)));
-//     let size = try!(r.seek(SeekFrom::End(0)));
-//     let elements = size / 72;
-//     if size % 72 != 0 {
-//         return Err(io::Error::new(io::ErrorKind::InvalidData, "Size not a multiple of 72"))
-//     }
-//     try!(r.seek(SeekFrom::Start(0)));
-//
-//     let mut enemies = Vec::new();
-// }
+/// Read a `Read` fully, parsing out all enemy structures.
+pub fn read_map_enemies<R: Read + Seek>(mut r: R) -> io::Result<Vec<MapEnemy>> {
+    try!(r.seek(SeekFrom::Start(0)));
+    let size = try!(r.seek(SeekFrom::End(0)));
+    let elements = size / 72;
+    if size % 72 != 0 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "Size not a multiple of 72"))
+    }
+    try!(r.seek(SeekFrom::Start(0)));
+
+    let mut enemies = Vec::new();
+    for _ in 0..elements {
+        let enemy = try!(MapEnemy::deserialize(&mut r));
+        enemies.push(enemy);
+    }
+    Ok(enemies)
+}
+
+/// Read a `Read` fully, parsing out all map object structures.
+pub fn read_map_objects<R: Read + Seek>(mut r: R) -> io::Result<Vec<MapObject>> {
+    try!(r.seek(SeekFrom::Start(0)));
+    let size = try!(r.seek(SeekFrom::End(0)));
+    let elements = size / 68;
+    if size % 68 != 0 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "Size not a multiple of 68"))
+    }
+    try!(r.seek(SeekFrom::Start(0)));
+
+    let mut objects = Vec::new();
+    for _ in 0..elements {
+        let object = try!(MapObject::deserialize(&mut r));
+        objects.push(object);
+    }
+    Ok(objects)
+}

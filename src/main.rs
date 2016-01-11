@@ -33,6 +33,7 @@ pub mod args;
 pub mod loop_handler;
 pub mod services;
 pub mod config;
+pub mod maps;
 
 use ::args::USAGE_STRING;
 use ::args::Args;
