@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::net::SocketAddrV4;
@@ -24,12 +25,12 @@ pub struct BbLoginHandler {
     sg_sender: SgCbMgr<BbLoginHandler>,
     client_id: usize,
     clients: Rc<RefCell<HashMap<usize, ClientState>>>,
-    param_files: Rc<(Message, Vec<Message>)>,
+    param_files: Arc<(Message, Vec<Message>)>,
     redir_addr: SocketAddrV4
 }
 
 impl BbLoginHandler {
-    pub fn new(sender: Sender<LoopMsg>, redir_addr: SocketAddrV4, sg_sender: SgCbMgr<BbLoginHandler>, client_id: usize, clients: Rc<RefCell<HashMap<usize, ClientState>>>, param_files: Rc<(Message, Vec<Message>)>) -> BbLoginHandler {
+    pub fn new(sender: Sender<LoopMsg>, redir_addr: SocketAddrV4, sg_sender: SgCbMgr<BbLoginHandler>, client_id: usize, clients: Rc<RefCell<HashMap<usize, ClientState>>>, param_files: Arc<(Message, Vec<Message>)>) -> BbLoginHandler {
         BbLoginHandler {
             sender: sender,
             sg_sender: sg_sender,

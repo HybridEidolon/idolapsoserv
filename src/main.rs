@@ -41,10 +41,13 @@ use docopt::Docopt;
 
 use mio::EventLoop;
 
+use psodata::battleparam::BattleParamTables;
+
 use ::loop_handler::LoopHandler;
 use ::patch::PatchService;
 use ::data::DataService;
 use ::login::bb::BbLoginService;
+use ::login::paramfiles::load_paramfiles_msgs;
 use ::shipgate::client::ShipGateClient;
 use ::ship::ShipService;
 use ::block::BlockService;
@@ -86,8 +89,20 @@ fn main() {
         let mut keytable_file = File::open(&config.bb_keytable_path).expect("Failed to open BB keytable file");
         bb_keytable = Arc::new(read_key_table(&mut keytable_file).expect("Failed to parse BB keytable"));
     }
+    info!("Loaded BB key table from: {}", config.bb_keytable_path);
+
+    // Load the parameter files (for the login servers)
+    let param_files = Arc::new(load_paramfiles_msgs(&config.data_path)
+        .expect("Unable to load the Blue Burst parameter files for login servers."));
+    info!("Loaded BB login parameter files from data path: {}", config.data_path);
+
+    // Load the battle param entries (for BB-compatible ship blocks)
+    let battle_params = Arc::new(BattleParamTables::load_from_files(&format!("{}/param", config.data_path))
+        .expect("Unable to load Blue Burst battle parameters for blocks."));
+    info!("Loaded BB battle parameters from path: {}/param", config.data_path);
 
     let mut event_loop = EventLoop::new().expect("Could not create event loop");
+    info!("Socket event loop created.");
 
     // If we have a shipgate service in our configuration, we should spin it up first.
     let mut sg: Option<Service> = None;
@@ -108,29 +123,29 @@ fn main() {
     for s in config.services.iter() {
         match s {
             &ServiceConf::Patch { ref bind, ref v4_servers, ref motd, random_balance } => {
-                println!("Patch service at {:?}", bind);
+                info!("Patch service at {:?}", bind);
                 services.push(PatchService::spawn(bind, event_loop.channel(), v4_servers.clone(), motd.clone(), random_balance));
             },
             &ServiceConf::Data { ref bind, .. } => {
-                println!("Data service at {:?}", bind);
+                info!("Data service at {:?}", bind);
                 services.push(DataService::spawn(bind, event_loop.channel()));
             },
             &ServiceConf::Login { ref bind, version, addr, .. } => {
-                println!("Login service at {:?}", bind);
+                info!("Login service at {:?}", bind);
                 match version {
                     Version::BlueBurst => {
-                        services.push(BbLoginService::spawn(bind, addr, event_loop.channel(), bb_keytable.clone(), &sg_sender, &config.data_path))
+                        services.push(BbLoginService::spawn(bind, addr, event_loop.channel(), bb_keytable.clone(), &sg_sender, param_files.clone()))
                     },
                     _ => unimplemented!()
                 }
             },
             &ServiceConf::Ship { ref bind, ref name, ref blocks, .. } => {
-                println!("Ship service at {:?}", bind);
+                info!("Ship service at {:?}", bind);
                 services.push(ShipService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, name, blocks.clone()));
             },
             &ServiceConf::Block { ref bind, num, event, .. } => {
-                println!("Block service at {:?}", bind);
-                services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone(), num, event, &config.data_path));
+                info!("Block service at {:?}", bind);
+                services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone(), num, event, battle_params.clone()));
             },
             &ServiceConf::ShipGate { .. } => {
                 match sg {
@@ -145,7 +160,7 @@ fn main() {
             }
         }
     }
-    println!("{} total services.", services.len());
+    info!("{} total services.", services.len());
 
     let mut loop_handler = LoopHandler::new(services, &mut event_loop);
 

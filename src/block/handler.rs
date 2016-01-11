@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 use std::cell::RefCell;
 use std::collections::HashMap;
 //use std::fs::File;
@@ -29,7 +30,7 @@ pub struct BlockHandler {
     clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
     lobbies: Rc<RefCell<Vec<Lobby>>>,
     parties: Rc<RefCell<Vec<Party>>>,
-    pub battle_params: Rc<BattleParamTables>
+    pub battle_params: Arc<BattleParamTables>
 }
 
 impl BlockHandler {
@@ -39,7 +40,7 @@ impl BlockHandler {
                clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
                lobbies: Rc<RefCell<Vec<Lobby>>>,
                parties: Rc<RefCell<Vec<Party>>>,
-               battle_params: Rc<BattleParamTables>) -> BlockHandler {
+               battle_params: Arc<BattleParamTables>) -> BlockHandler {
         BlockHandler {
             sender: sender,
             sg_sender: sg_sender,

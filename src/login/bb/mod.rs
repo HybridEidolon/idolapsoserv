@@ -8,12 +8,12 @@ use ::loop_handler::LoopMsg;
 
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
 use std::thread;
 use std::net::{SocketAddr, SocketAddrV4};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use mio::tcp::TcpListener;
 use mio::Sender;
@@ -24,7 +24,6 @@ use rand::random;
 
 use ::services::message::NetMsg;
 use ::services::ServiceType;
-use ::login::paramfiles::load_paramfiles_msgs;
 
 use ::shipgate::client::SgSender;
 use ::shipgate::client::callbacks::SgCbMgr;
@@ -40,20 +39,17 @@ pub struct BbLoginService {
     sender: Sender<LoopMsg>,
     sg_sender: SgCbMgr<BbLoginHandler>,
     clients: Rc<RefCell<HashMap<usize, ClientState>>>,
-    param_files: Rc<(Message, Vec<Message>)>,
+    param_files: Arc<(Message, Vec<Message>)>,
     redir_addr: SocketAddrV4
 }
 
 impl BbLoginService {
-    pub fn spawn(bind: &SocketAddr, redir_addr: SocketAddrV4, sender: Sender<LoopMsg>, key_table: Arc<Vec<u32>>, sg_sender: &SgSender, data_path: &str) -> Service {
+    pub fn spawn(bind: &SocketAddr, redir_addr: SocketAddrV4, sender: Sender<LoopMsg>, key_table: Arc<Vec<u32>>, sg_sender: &SgSender, param_files: Arc<(Message, Vec<Message>)>) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
 
         let sg_sender = sg_sender.clone_with(tx.clone());
-
-        // load param data
-        let params = load_paramfiles_msgs(data_path).expect("Couldn't load param files from data path");
 
         thread::spawn(move|| {
             let d = BbLoginService {
@@ -61,7 +57,7 @@ impl BbLoginService {
                 sender: sender,
                 sg_sender: sg_sender.into(),
                 clients: Default::default(),
-                param_files: Rc::new(params),
+                param_files: param_files,
                 redir_addr: redir_addr
             };
             d.run()

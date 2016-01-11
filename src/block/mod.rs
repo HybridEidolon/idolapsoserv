@@ -45,8 +45,7 @@ pub struct BlockService {
     parties: Rc<RefCell<Vec<Party>>>,
     block_num: u16,
     event: u16,
-    data_path: String,
-    battle_params: Option<Rc<BattleParamTables>>
+    battle_params: Arc<BattleParamTables>
 }
 
 impl BlockService {
@@ -56,14 +55,12 @@ impl BlockService {
                  key_table: Arc<Vec<u32>>,
                  block_num: u16,
                  event: u16,
-                 data_path: &str) -> Service {
+                 battle_params: Arc<BattleParamTables>) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
 
         let sg_sender = sg_sender.clone_with(tx.clone());
-
-        let data_path = data_path.to_owned();
 
         thread::spawn(move|| {
             let d = BlockService {
@@ -75,8 +72,7 @@ impl BlockService {
                 parties: Default::default(),
                 block_num: block_num,
                 event: event,
-                data_path: data_path,
-                battle_params: None
+                battle_params: battle_params
             };
             d.run();
         });
@@ -92,7 +88,7 @@ impl BlockService {
             self.clients.clone(),
             self.lobbies.clone(),
             self.parties.clone(),
-            self.battle_params.clone().unwrap()
+            self.battle_params.clone()
         )
     }
 
@@ -105,21 +101,11 @@ impl BlockService {
         info!("Initialized 15 lobbies with event {}", self.event);
     }
 
-    fn load_params(&mut self) {
-        let params = BattleParamTables::load_from_files(&format!("{}/param", self.data_path)).unwrap();
-        self.battle_params = Some(Rc::new(params));
-        info!("Loaded battle parameters from files");
-    }
-
     pub fn run(mut self) {
-        info!("Block service running");
-
         // Initialize lobbies
         self.init_lobbies();
 
-        // Load battle params
-        self.load_params();
-
+        info!("Block service running");
         loop {
             let msg = match self.receiver.recv() {
                 Ok(m) => m,
