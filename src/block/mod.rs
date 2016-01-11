@@ -143,6 +143,22 @@ impl BlockService {
                             }
                         }
                     }
+                    {
+                        let pr = self.parties.clone();
+                        let ref mut parties = pr.borrow_mut();
+                        let mut party_index = 0;
+                        let mut remove = false;
+                        for (i, p) in parties.iter_mut().enumerate() {
+                            if p.has_player(id) {
+                                remove = p.remove_player(&mut h, id).unwrap();
+                                party_index = i;
+                                break
+                            }
+                        }
+                        if remove {
+                            parties.remove(party_index);
+                        }
+                    }
 
                     drop(h);
 
