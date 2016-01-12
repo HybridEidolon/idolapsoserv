@@ -1,13 +1,23 @@
 //! Where the majority of the game occurs.
 
+use std::sync::Arc;
+
 pub mod error;
+pub mod enemygen;
+
+use rand::random;
 
 use psomsg::bb::Message as BbMsg;
 use psomsg::bb::*;
 
+use psodata::map::MapEnemy;
+
+use ::maps::{Areas, InstanceEnemy, Ep1Areas, Ep2Areas, Ep4Areas};
+
 use super::handler::BlockHandler;
 
 use self::error::PartyError;
+use self::enemygen::convert_enemy;
 
 #[derive(Clone, Debug)]
 pub struct Party {
@@ -19,11 +29,31 @@ pub struct Party {
     pub challenge: bool,
     pub single_player: bool,
     members: [Option<usize>; 4],
-    leader_id: u8
+    leader_id: u8,
+    online_maps: Arc<Areas>,
+    variants: Vec<u32>,
+    enemies: Vec<InstanceEnemy>
 }
 
 impl Party {
-    pub fn new(name: &str, password: Option<&str>, episode: u8, difficulty: u8, battle: bool, challenge: bool, single_player: bool) -> Party {
+    pub fn new(name: &str, password: Option<&str>, episode: u8, difficulty: u8, battle: bool, challenge: bool, single_player: bool, event: u16, online_maps: Arc<Areas>) -> Party {
+        // pick random variants for each map based on episode
+        let (variants, enemies) = match episode {
+            1 => {
+                info!("Generating episode 1 party");
+                Party::random_variants_ep1(&online_maps.ep1, event)
+            },
+            2 => {
+                info!("Generating episode 2 party");
+                Party::random_variants_ep2(&online_maps.ep2, event)
+            },
+            3 => {
+                info!("Generating episode 4 party");
+                Party::random_variants_ep4(&online_maps.ep4, event)
+            },
+            _ => panic!("unsupported episode")
+        };
+        info!("{} total enemies", enemies.len());
         Party {
             name: name.to_owned(),
             password: password.map(|s| s.to_owned()),
@@ -33,7 +63,10 @@ impl Party {
             challenge: challenge,
             single_player: single_player,
             members: Default::default(),
-            leader_id: 0
+            leader_id: 0,
+            online_maps: online_maps,
+            variants: variants,
+            enemies: enemies
         }
     }
 
@@ -62,6 +95,7 @@ impl Party {
         let c = cr.borrow();
 
         let mut l = BbGameJoin::default();
+        l.maps = self.variants.clone();
         l.client_id = 0;
         l.leader_id = 0;
         l.one = 1;
@@ -189,20 +223,52 @@ impl Party {
     }
 
     pub fn handle_bb_60_req_exp(&mut self, handler: &mut BlockHandler, m: Bb60ReqExp) {
-        info!("Request exp: {:?}", m);
         let cid = handler.client_id;
-        handler.send_to_client(cid, Message::BbSubCmd60(0, BbSubCmd60::Bb60GiveExp { client_id: 0, unused: 0, data: Bb60GiveExp(25) }));
-        // send a level up as a test
-        let mut lup: Bb60LevelUp = Bb60LevelUp::default();
-        {
-            let cr = handler.get_client_state(cid).unwrap();
-            let ref mut c = cr.borrow_mut();
-            if let Some(ref mut ch) = c.full_char {
-                ch.chara.level += 1;
-                lup.level = ch.chara.level;
+        debug!("Client {} request exp: {:?}", cid, m);
+        if let Some(ref enemy) = self.enemies.get(m.enemy_id as usize) {
+            // TODO handle levelups with player level table
+            let bp = {
+                match self.episode {
+                    1 => handler.battle_params.get_ep1(enemy.param_entry, self.single_player).cloned(),
+                    2 => handler.battle_params.get_ep2(enemy.param_entry, self.single_player).cloned(),
+                    3 => handler.battle_params.get_ep4(enemy.param_entry, self.single_player).cloned(),
+                    _ => unreachable!()
+                }
+            };
+
+            if let Some(bp) = bp {
+                info!("Client {} request verified; +{} EXP for killing {} ({})", cid, bp.exp, enemy.name, m.enemy_id);
+                self.award_exp(cid, handler, bp.exp);
+            } else {
+                error!("Battle param entry for enemy id {} doesn't exist", m.enemy_id);
+                return
             }
+        } else {
+            warn!("Client {} tried to gain exp for an enemy that doesn't exist: {}", cid, m.enemy_id);
+            return
         }
-        handler.send_to_client(cid, Message::BbSubCmd60(0, BbSubCmd60::Bb60LevelUp { client_id: 0, unused: 0, data: lup }));
+        // handler.send_to_client(cid, Message::BbSubCmd60(0, BbSubCmd60::Bb60GiveExp { client_id: 0, unused: 0, data: Bb60GiveExp(25) }));
+        // send a level up as a test
+        // let mut lup: Bb60LevelUp = Bb60LevelUp::default();
+        // {
+        //     let cr = handler.get_client_state(cid).unwrap();
+        //     let ref mut c = cr.borrow_mut();
+        //     if let Some(ref mut ch) = c.full_char {
+        //         ch.chara.level += 1;
+        //         lup.level = ch.chara.level;
+        //     }
+        // }
+        // handler.send_to_client(cid, Message::BbSubCmd60(0, BbSubCmd60::Bb60LevelUp { client_id: 0, unused: 0, data: lup }));
+    }
+
+    fn award_exp(&self, client: usize, handler: &mut BlockHandler, exp: u32) {
+        // TODO check for levelup using level table
+        {
+            let cr = handler.get_client_state(client).unwrap();
+            let ref mut client = cr.borrow_mut();
+            client.full_char.as_mut().unwrap().chara.exp += exp;
+        }
+        handler.send_to_client(client, Message::BbSubCmd60(0, BbSubCmd60::Bb60GiveExp { client_id: 0, unused: 0, data: Bb60GiveExp(exp) }))
     }
 
     fn find_first_player_not_matching(&self, player: usize) -> Option<(u8, usize)> {
@@ -227,5 +293,177 @@ impl Party {
             }
         }
         None
+    }
+
+    fn random_variants_ep1(maps: &Ep1Areas, event: u16) -> (Vec<u32>, Vec<InstanceEnemy>) {
+        let mut variants = vec![0; 0x20];
+        let mut enemies = Vec::with_capacity(0xB50);
+        Party::append_enemies(&maps.city.enemies, &mut enemies, 1, event, false);
+
+        // Forest
+        variants[3] = (random::<usize>() % maps.forest1.len()) as u32;
+        variants[5] = (random::<usize>() % maps.forest2.len()) as u32;
+        Party::append_enemies(&maps.forest1[variants[3] as usize].enemies, &mut enemies, 1, event, false);
+        Party::append_enemies(&maps.forest2[variants[5] as usize].enemies, &mut enemies, 1, event, false);
+
+        {
+            let keys: Vec<_> = maps.cave1.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[6] = m;
+            variants[7] = v;
+            Party::append_enemies(&maps.cave1.get(&(m, v)).unwrap().enemies, &mut enemies, 1, event, false);
+            let keys: Vec<_> = maps.cave2.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[8] = m;
+            variants[9] = v;
+            Party::append_enemies(&maps.cave2.get(&(m, v)).unwrap().enemies, &mut enemies, 1, event, false);
+            let keys: Vec<_> = maps.cave3.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[10] = m;
+            variants[11] = v;
+            Party::append_enemies(&maps.cave3.get(&(m, v)).unwrap().enemies, &mut enemies, 1, event, false);
+            let keys: Vec<_> = maps.machine1.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[12] = m;
+            variants[13] = v;
+            Party::append_enemies(&maps.machine1.get(&(m, v)).unwrap().enemies, &mut enemies, 1, event, false);
+            let keys: Vec<_> = maps.machine2.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[14] = m;
+            variants[15] = v;
+            Party::append_enemies(&maps.machine2.get(&(m, v)).unwrap().enemies, &mut enemies, 1, event, false);
+            let keys: Vec<_> = maps.ancient1.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[16] = m;
+            variants[17] = v;
+            Party::append_enemies(&maps.ancient1.get(&(m, v)).unwrap().enemies, &mut enemies, 1, event, false);
+            let keys: Vec<_> = maps.ancient2.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[18] = m;
+            variants[19] = v;
+            Party::append_enemies(&maps.ancient2.get(&(m, v)).unwrap().enemies, &mut enemies, 1, event, false);
+            let keys: Vec<_> = maps.ancient3.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[20] = m;
+            variants[21] = v;
+            Party::append_enemies(&maps.ancient3.get(&(m, v)).unwrap().enemies, &mut enemies, 1, event, false);
+        }
+        Party::append_enemies(&maps.boss1.enemies, &mut enemies, 1, event, false);
+        Party::append_enemies(&maps.boss2.enemies, &mut enemies, 1, event, false);
+        Party::append_enemies(&maps.boss3.enemies, &mut enemies, 1, event, false);
+        Party::append_enemies(&maps.boss4.enemies, &mut enemies, 1, event, false);
+        (variants, enemies)
+    }
+
+    fn random_variants_ep2(maps: &Ep2Areas, event: u16) -> (Vec<u32>, Vec<InstanceEnemy>) {
+        let mut variants = vec![0; 0x20];
+        let mut enemies = Vec::new();
+        Party::append_enemies(&maps.city.enemies, &mut enemies, 2, event, false);
+
+        {
+            let keys: Vec<_> = maps.ruins1.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[2] = m;
+            variants[3] = v;
+            Party::append_enemies(&maps.ruins1.get(&(m, v)).unwrap().enemies, &mut enemies, 2, event, false);
+            let keys: Vec<_> = maps.ruins2.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[4] = m;
+            variants[5] = v;
+            Party::append_enemies(&maps.ruins2.get(&(m, v)).unwrap().enemies, &mut enemies, 2, event, false);
+            let keys: Vec<_> = maps.space1.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[6] = m;
+            variants[7] = v;
+            Party::append_enemies(&maps.space1.get(&(m, v)).unwrap().enemies, &mut enemies, 2, event, false);
+            let keys: Vec<_> = maps.space2.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[8] = m;
+            variants[9] = v;
+            Party::append_enemies(&maps.space2.get(&(m, v)).unwrap().enemies, &mut enemies, 2, event, false);
+
+            variants[11] = (random::<usize>() % maps.jungle1.len()) as u32;
+            variants[13] = (random::<usize>() % maps.jungle2.len()) as u32;
+            variants[15] = (random::<usize>() % maps.jungle3.len()) as u32;
+            variants[19] = (random::<usize>() % maps.jungle5.len()) as u32;
+            Party::append_enemies(&maps.jungle1[variants[11] as usize].enemies, &mut enemies, 2, event, false);
+            Party::append_enemies(&maps.jungle2[variants[13] as usize].enemies, &mut enemies, 2, event, false);
+            Party::append_enemies(&maps.jungle3[variants[15] as usize].enemies, &mut enemies, 2, event, false);
+
+            let keys: Vec<_> = maps.jungle4.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[16] = m;
+            variants[17] = v;
+            Party::append_enemies(&maps.jungle4.get(&(m, v)).unwrap().enemies, &mut enemies, 2, event, false);
+
+            Party::append_enemies(&maps.jungle5[variants[19] as usize].enemies, &mut enemies, 2, event, false);
+
+            let keys: Vec<_> = maps.seabed1.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[20] = m;
+            variants[21] = v;
+            Party::append_enemies(&maps.seabed1.get(&(m, v)).unwrap().enemies, &mut enemies, 2, event, false);
+            let keys: Vec<_> = maps.seabed2.keys().collect();
+            let i = random::<usize>() % keys.len();
+            let &(m, v) = keys[i];
+            variants[22] = m;
+            variants[23] = v;
+            Party::append_enemies(&maps.seabed2.get(&(m, v)).unwrap().enemies, &mut enemies, 2, event, false);
+        }
+        // bosses
+        Party::append_enemies(&maps.boss5.enemies, &mut enemies, 2, event, false);
+        Party::append_enemies(&maps.boss6.enemies, &mut enemies, 2, event, false);
+        Party::append_enemies(&maps.boss7.enemies, &mut enemies, 2, event, false);
+        Party::append_enemies(&maps.boss8.enemies, &mut enemies, 2, event, false);
+
+        (variants, enemies)
+    }
+
+    fn random_variants_ep4(maps: &Ep4Areas, event: u16) -> (Vec<u32>, Vec<InstanceEnemy>) {
+        let mut variants = vec![0; 0x20];
+        let mut enemies = Vec::new();
+        Party::append_enemies(&maps.city.enemies, &mut enemies, 3, event, false);
+
+        variants[2] = (random::<usize>() % maps.wilds1.len()) as u32;
+        variants[5] = (random::<usize>() % maps.wilds2.len()) as u32;
+        variants[7] = (random::<usize>() % maps.wilds3.len()) as u32;
+        variants[9] = (random::<usize>() % maps.wilds4.len()) as u32;
+        variants[11] = (random::<usize>() % maps.crater.len()) as u32;
+        variants[12] = (random::<usize>() % maps.desert1.len()) as u32;
+        variants[15] = (random::<usize>() % maps.desert2.len()) as u32;
+        variants[16] = (random::<usize>() % maps.desert3.len()) as u32;
+
+        Party::append_enemies(&maps.wilds1[variants[2] as usize].enemies, &mut enemies, 3, event, false);
+        Party::append_enemies(&maps.wilds2[variants[5] as usize].enemies, &mut enemies, 3, event, false);
+        Party::append_enemies(&maps.wilds3[variants[7] as usize].enemies, &mut enemies, 3, event, false);
+        Party::append_enemies(&maps.wilds4[variants[9] as usize].enemies, &mut enemies, 3, event, false);
+        Party::append_enemies(&maps.crater[variants[11] as usize].enemies, &mut enemies, 3, event, false);
+        Party::append_enemies(&maps.desert1[variants[12] as usize].enemies, &mut enemies, 3, event, true);
+        Party::append_enemies(&maps.desert2[variants[15] as usize].enemies, &mut enemies, 3, event, true);
+        Party::append_enemies(&maps.desert3[variants[16] as usize].enemies, &mut enemies, 3, event, true);
+
+        Party::append_enemies(&maps.boss9.enemies, &mut enemies, 3, event, false);
+
+        (variants, enemies)
+    }
+
+    fn append_enemies(map_enemies: &[MapEnemy], instance_enemies: &mut Vec<InstanceEnemy>, episode: u8, event: u16, alt_enemies: bool) {
+        for m in map_enemies.iter() {
+            instance_enemies.append(&mut convert_enemy(m, episode, event, alt_enemies));
+        }
     }
 }

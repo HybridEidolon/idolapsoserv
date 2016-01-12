@@ -149,7 +149,7 @@ pub fn read_map_enemies<R: Read + Seek>(mut r: R) -> io::Result<Vec<MapEnemy>> {
     let size = try!(r.seek(SeekFrom::End(0)));
     let elements = size / 72;
     if size % 72 != 0 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Size not a multiple of 72"))
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "Enemy file size not a multiple of 72"))
     }
     try!(r.seek(SeekFrom::Start(0)));
 
@@ -166,9 +166,6 @@ pub fn read_map_objects<R: Read + Seek>(mut r: R) -> io::Result<Vec<MapObject>> 
     try!(r.seek(SeekFrom::Start(0)));
     let size = try!(r.seek(SeekFrom::End(0)));
     let elements = size / 68;
-    if size % 68 != 0 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Size not a multiple of 68"))
-    }
     try!(r.seek(SeekFrom::Start(0)));
 
     let mut objects = Vec::new();

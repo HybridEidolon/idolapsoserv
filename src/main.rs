@@ -62,6 +62,7 @@ use std::sync::Arc;
 
 use ::game::Version;
 use ::bb::read_key_table;
+use ::maps::Areas;
 
 fn main() {
     env_logger::init().expect("env_logger failed to initialize");
@@ -101,6 +102,14 @@ fn main() {
     let battle_params = Arc::new(BattleParamTables::load_from_files(&format!("{}/param", config.data_path))
         .expect("Unable to load Blue Burst battle parameters for blocks."));
     info!("Loaded BB battle parameters from path: {}/param", config.data_path);
+
+    // Load the maps for online mode
+    let online_maps = Arc::new(Areas::load_from_files(&format!("{}/maps", config.data_path)).expect("Unable to load Blue Burst online map files"));
+    info!("Loaded BB online mode map files for enemy data from path: {}/maps", config.data_path);
+
+    // TODO Load the maps for offline mode
+    // let offline_maps = Arc::new(Areas::load_from_files_offline(&format!("{}/maps", config.data_path)).expect("Unable to load Blue Burst offline map files"));
+    // info!("Loaded BB offline mode map files for enemy data from path: {}/maps")
 
     let mut event_loop = EventLoop::new().expect("Could not create event loop");
     info!("Socket event loop created.");
@@ -146,7 +155,7 @@ fn main() {
             },
             &ServiceConf::Block { ref bind, num, event, .. } => {
                 info!("Block service at {:?}", bind);
-                services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone(), num, event, battle_params.clone()));
+                services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone(), num, event, battle_params.clone(), online_maps.clone()));
             },
             &ServiceConf::ShipGate { .. } => {
                 match sg {

@@ -16,6 +16,7 @@ use ::loop_handler::LoopMsg;
 use ::shipgate::msg::Message as Sgm;
 use ::shipgate::msg::BbLoginChallenge;
 use ::shipgate::msg::BbGetAccountInfo;
+use ::maps::Areas;
 
 use super::client::ClientState;
 use super::lobbyhandler::Lobby;
@@ -30,7 +31,8 @@ pub struct BlockHandler {
     clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
     lobbies: Rc<RefCell<Vec<Lobby>>>,
     parties: Rc<RefCell<Vec<Party>>>,
-    pub battle_params: Arc<BattleParamTables>
+    pub battle_params: Arc<BattleParamTables>,
+    online_maps: Arc<Areas>
 }
 
 impl BlockHandler {
@@ -40,7 +42,8 @@ impl BlockHandler {
                clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
                lobbies: Rc<RefCell<Vec<Lobby>>>,
                parties: Rc<RefCell<Vec<Party>>>,
-               battle_params: Arc<BattleParamTables>) -> BlockHandler {
+               battle_params: Arc<BattleParamTables>,
+               online_maps: Arc<Areas>) -> BlockHandler {
         BlockHandler {
             sender: sender,
             sg_sender: sg_sender,
@@ -48,7 +51,8 @@ impl BlockHandler {
             clients: clients,
             lobbies: lobbies,
             parties: parties,
-            battle_params: battle_params
+            battle_params: battle_params,
+            online_maps: online_maps
         }
     }
 
@@ -277,19 +281,6 @@ impl BlockHandler {
     pub fn bb_create_game(&mut self, m: BbCreateGame) {
         info!("Client {} is creating party {}", self.client_id, &m.name[2..]);
 
-        // we first want to remove them from their lobby...
-        {
-            let lsr = self.lobbies.clone();
-            let mut lobbies = lsr.borrow_mut();
-            for l in lobbies.iter_mut() {
-                if l.has_player(self.client_id) {
-                    let cid = self.client_id;
-                    l.remove_player(self, cid).unwrap();
-                    break;
-                }
-            }
-        }
-
         let psr = self.parties.clone();
         let mut parties = psr.borrow_mut();
         // check if a party with that name already exists
@@ -314,10 +305,34 @@ impl BlockHandler {
             self.send_error(self.client_id, "\tEChallenge mode is not\nsupported yet. Sorry!");
             return
         }
+        if m.single_player != 0 {
+            self.send_error(self.client_id, "\tEOffline mode maps are\nnot loaded yet. WIP");
+            return
+        }
+
+        // we first want to remove them from their lobby...
+        let mut event = 0xFFFF;
+        {
+            let lsr = self.lobbies.clone();
+            let mut lobbies = lsr.borrow_mut();
+            for l in lobbies.iter_mut() {
+                if l.has_player(self.client_id) {
+                    let cid = self.client_id;
+                    event = l.event_num();
+                    l.remove_player(self, cid).unwrap();
+                    break;
+                }
+            }
+            if event == 0xFFFF {
+                // player isn't in a lobby...
+                self.send_fatal_error(self.client_id, "\tEIllegal message");
+                return
+            }
+        }
 
         // create the party
         let pass: Option<&str> = if m.password.len() == 0 { None } else { Some(&m.password) };
-        let mut p = Party::new(&m.name, pass, m.episode, m.difficulty, m.battle != 0, m.challenge != 0, m.single_player != 0);
+        let mut p = Party::new(&m.name, pass, m.episode, m.difficulty, m.battle != 0, m.challenge != 0, m.single_player != 0, event, self.online_maps.clone());
 
         let cid = self.client_id;
         p.add_player(self, cid).unwrap();

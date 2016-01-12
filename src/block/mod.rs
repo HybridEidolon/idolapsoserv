@@ -25,6 +25,7 @@ use ::services::message::NetMsg;
 use ::shipgate::client::callbacks::SgCbMgr;
 use ::services::{ServiceMsg, Service, ServiceType};
 use ::loop_handler::LoopMsg;
+use ::maps::Areas;
 
 pub mod client;
 pub mod handler;
@@ -45,7 +46,9 @@ pub struct BlockService {
     parties: Rc<RefCell<Vec<Party>>>,
     block_num: u16,
     event: u16,
-    battle_params: Arc<BattleParamTables>
+    battle_params: Arc<BattleParamTables>,
+    online_maps: Arc<Areas>
+    //offline_maps: Arc<Areas>
 }
 
 impl BlockService {
@@ -55,7 +58,8 @@ impl BlockService {
                  key_table: Arc<Vec<u32>>,
                  block_num: u16,
                  event: u16,
-                 battle_params: Arc<BattleParamTables>) -> Service {
+                 battle_params: Arc<BattleParamTables>,
+                 online_maps: Arc<Areas>) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -72,7 +76,8 @@ impl BlockService {
                 parties: Default::default(),
                 block_num: block_num,
                 event: event,
-                battle_params: battle_params
+                battle_params: battle_params,
+                online_maps: online_maps
             };
             d.run();
         });
@@ -88,7 +93,8 @@ impl BlockService {
             self.clients.clone(),
             self.lobbies.clone(),
             self.parties.clone(),
-            self.battle_params.clone()
+            self.battle_params.clone(),
+            self.online_maps.clone()
         )
     }
 

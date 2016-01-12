@@ -1,7 +1,5 @@
 //! Structures for managing free exploration map data.
 
-// nine areas per episode (8 in ep4)
-
 use std::fs::File;
 use std::io;
 
@@ -51,7 +49,7 @@ pub enum Ep2AreaCode {
     SpaceshipBeta,
     CentralControlArea,
     JungleNorth,
-    JongleEast,
+    JungleEast,
     Mountain,
     Seaside,
     SeabedUpper,
@@ -77,43 +75,57 @@ pub enum Ep4AreaCode {
     Desert1,
     Desert2,
     Desert3,
-    SaintMilion // also Shambertin (Point of Disaster), Kondrieu (rare)
+    SaintMilion // also Shambertin (Point of Disaster), Kondrieu (rare),
+    // or preferably, the snake asshole that is too hard to hit
 }
 
-/// Container of all the maps for an area.
-pub struct AreaMaps {
-    pub maps: Vec<MapVariants>
+/// Collection of all areas
+#[derive(Clone, Debug)]
+pub struct Areas {
+    pub ep1: Ep1Areas,
+    pub ep2: Ep2Areas,
+    pub ep4: Ep4Areas
 }
 
-/// Container of all the variants for a map.
-pub struct MapVariants {
-    pub variants: Vec<VariationData>,
-    pub offline_variants: Vec<VariationData>
-}
+impl Areas {
+    /// Load online mode maps
+    pub fn load_from_files(path: &str) -> io::Result<Areas> {
+        let ep1 = try!(Ep1Areas::load_from_files(path));
+        let ep2 = try!(Ep2Areas::load_from_files(path));
+        let ep4 = try!(Ep4Areas::load_from_files(path));
+        Ok(Areas {
+            ep1: ep1,
+            ep2: ep2,
+            ep4: ep4
+        })
+    }
 
-impl MapVariants {
-    /// Get a random variation of this map.
-    pub fn random_variation(&self, offline: bool) -> (u32, &VariationData) {
-        use rand::random;
-        let index: usize = random::<usize>() % self.variants.len();
-        if offline {
-            (index as u32, self.offline_variants.get(index as usize).unwrap())
-        } else {
-            (index as u32, self.variants.get(index as usize).unwrap())
-        }
+    /// Load offline mode maps
+    pub fn load_from_files_offline(path: &str) -> io::Result<Areas> {
+        let ep1 = try!(Ep1Areas::load_from_files_offline(path));
+        let ep2 = try!(Ep2Areas::load_from_files_offline(path));
+        let ep4 = try!(Ep4Areas::load_from_files_offline(path));
+        Ok(Areas {
+            ep1: ep1,
+            ep2: ep2,
+            ep4: ep4
+        })
     }
 }
 
 /// An enemy in a lobby instance.
+#[derive(Clone, Debug)]
 pub struct InstanceEnemy {
     pub param_entry: usize,
-    // pub rt_index: u8,
+    pub rt_entry: usize,
+    pub name: &'static str
     // pub clients_hit: u8,
     // pub last_client: u8,
     // pub drop_done: bool
 }
 
 /// An object in a lobby instance.
+#[derive(Clone, Debug)]
 pub struct InstanceObject {
     pub data: MapObject
 }
@@ -126,6 +138,7 @@ pub struct VariationData {
 }
 
 impl VariationData {
+    /// Make a variation from two map_.dat files.
     pub fn load_from_files(root: &str, enemies: &str, objects: &str) -> io::Result<VariationData> {
         let mut file = try!(File::open(format!("{}/{}", root, enemies)));
         let e = try!(read_map_enemies(&mut file));
@@ -133,7 +146,7 @@ impl VariationData {
         let o = try!(read_map_objects(&mut file));
         Ok(VariationData {
             enemies: e,
-            objects: o
+            objects: o,
         })
     }
 }

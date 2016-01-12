@@ -7,6 +7,7 @@ use psomsg::bb::Message as BbMsg;
 use psomsg::bb::*;
 
 pub mod error;
+pub mod event;
 
 use self::error::LobbyError;
 
@@ -240,6 +241,7 @@ impl Lobby {
 
     pub fn lobby_num(&self) -> u8 { self.lobby_num }
     pub fn block_num(&self) -> u16 { self.block_num }
+    pub fn event_num(&self) -> u16 { self.event }
 
     /// Sets the event and reloads all clients.
     pub fn set_event_reload(&mut self, handler: &mut BlockHandler, event: u16) -> Result<(), LobbyError> {
