@@ -47,8 +47,8 @@ pub struct BlockService {
     block_num: u16,
     event: u16,
     battle_params: Arc<BattleParamTables>,
-    online_maps: Arc<Areas>
-    //offline_maps: Arc<Areas>
+    online_maps: Arc<Areas>,
+    offline_maps: Arc<Areas>
 }
 
 impl BlockService {
@@ -59,7 +59,8 @@ impl BlockService {
                  block_num: u16,
                  event: u16,
                  battle_params: Arc<BattleParamTables>,
-                 online_maps: Arc<Areas>) -> Service {
+                 online_maps: Arc<Areas>,
+                 offline_maps: Arc<Areas>) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -77,7 +78,8 @@ impl BlockService {
                 block_num: block_num,
                 event: event,
                 battle_params: battle_params,
-                online_maps: online_maps
+                online_maps: online_maps,
+                offline_maps: offline_maps
             };
             d.run();
         });
@@ -94,7 +96,8 @@ impl BlockService {
             self.lobbies.clone(),
             self.parties.clone(),
             self.battle_params.clone(),
-            self.online_maps.clone()
+            self.online_maps.clone(),
+            self.offline_maps.clone()
         )
     }
 

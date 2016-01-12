@@ -87,6 +87,7 @@ impl ClientHandler for BbClient {
 
     fn reregister<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
         debug!("Reregistering BB client token {}", self.token.0);
+        self.interests.insert(EventSet::readable());
         event_loop.reregister(
             &self.stream,
             self.token,

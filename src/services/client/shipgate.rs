@@ -79,6 +79,7 @@ impl ClientHandler for ShipGateClient {
     }
 
     fn reregister<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
+        self.interests.insert(EventSet::readable());
         event_loop.reregister(
             &self.stream,
             self.token,

@@ -99,7 +99,7 @@ pub fn convert_enemy(me: &MapEnemy, episode: u8, event: u16, alt_enemies: bool) 
         0x0044 => {
             debug!("Booma");
             ret.push(InstanceEnemy {
-                param_entry: 0x48 + (me.skin % 3) as usize,
+                param_entry: 0x4B + (me.skin % 3) as usize,
                 rt_entry: 0x09 + (me.skin % 3) as usize,
                 name: "Booma"
             });
@@ -123,10 +123,13 @@ pub fn convert_enemy(me: &MapEnemy, episode: u8, event: u16, alt_enemies: bool) 
             } else {
                 debug!("Poison/Nar Lily");
                 let acc = if me.reserved2[10] & 0x800000 > 0 {1} else {0};
+                let name = if acc == 1 { "Nar Lily" } else { "Poison Lily" };
+                info!("lily reserved2: {:?}", me.reserved2);
+                info!("lily reserved2[10]: {}", me.reserved2[10]);
                 ret.push(InstanceEnemy {
                     param_entry: 0x04 + acc,
                     rt_entry: 0x0D + acc,
-                    name: "Poison/Nar Lily"
+                    name: name
                 });
             }
         },
@@ -202,7 +205,8 @@ pub fn convert_enemy(me: &MapEnemy, episode: u8, event: u16, alt_enemies: bool) 
                 rt = 0x1A;
             }
 
-            for _ in 0..me.num_clones {
+            let clones = if me.num_clones == 0 {5} else {me.num_clones + 1};
+            for _ in 0..clones {
                 ret.push(InstanceEnemy {
                     param_entry: pe,
                     rt_entry: rt,
@@ -376,7 +380,15 @@ pub fn convert_enemy(me: &MapEnemy, episode: u8, event: u16, alt_enemies: bool) 
             });
         },
         0x00C8 => {
-            debug!("Dark Falz (3 phases) and 510 Darvants");
+            debug!("Dark Falz and 510 Darvants");
+
+            // Dark Falz
+            ret.push(InstanceEnemy {
+                param_entry: 0x37, //0x38 in >normal
+                rt_entry: 0x2F,
+                name: "Dark Falz"
+            });
+
             // darvants (spinny hurt things in pre-fight)
             for _ in 0..510 {
                 ret.push(InstanceEnemy {
@@ -385,24 +397,6 @@ pub fn convert_enemy(me: &MapEnemy, episode: u8, event: u16, alt_enemies: bool) 
                     name: "Darvant (Falz Minion)"
                 });
             }
-            // phase 3
-            ret.push(InstanceEnemy {
-                param_entry: 0x38,
-                rt_entry: 0x2F,
-                name: "Dark Falz Phase 3"
-            });
-            // phase 2
-            ret.push(InstanceEnemy {
-                param_entry: 0x37,
-                rt_entry: 0x2F,
-                name: "Dark Falz Phase 2"
-            });
-            // phase 1
-            ret.push(InstanceEnemy {
-                param_entry: 0x36,
-                rt_entry: 0x2F,
-                name: "Dark Falz Phase 1"
-            });
         },
         0x00CA => {
             debug!("Olga Flow");

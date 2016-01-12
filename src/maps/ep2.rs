@@ -29,40 +29,39 @@ pub struct Ep2Areas {
 
 impl Ep2Areas {
     pub fn load_from_files(path: &str) -> io::Result<Ep2Areas> {
-        // files with _s are seasonal variant but we don't actually care
         let city = try!(VariationData::load_from_files(path,
             "map_labo00_00e.dat", "map_labo00_00o.dat"));
 
         let ruins1 = {
             let mut vs = HashMap::with_capacity(2);
             vs.insert((0, 0), try!(VariationData::load_from_files(path,
-                "map_ruins01_00_00e.dat", "map_ruins01_00_00e.dat")));
+                "map_ruins01_00_00e.dat", "map_ruins01_00_00o.dat")));
             vs.insert((1, 0), try!(VariationData::load_from_files(path,
-                "map_ruins01_01_00e.dat", "map_ruins01_01_00e.dat")));
+                "map_ruins01_01_00e.dat", "map_ruins01_01_00o.dat")));
             vs
         };
         let ruins2 = {
             let mut vs = HashMap::with_capacity(2);
             vs.insert((0, 0), try!(VariationData::load_from_files(path,
-                "map_ruins02_00_00e.dat", "map_ruins02_00_00e.dat")));
+                "map_ruins02_00_00e.dat", "map_ruins02_00_00o.dat")));
             vs.insert((1, 0), try!(VariationData::load_from_files(path,
-                "map_ruins02_01_00e.dat", "map_ruins02_01_00e.dat")));
+                "map_ruins02_01_00e.dat", "map_ruins02_01_00o.dat")));
             vs
         };
         let space1 = {
             let mut vs = HashMap::with_capacity(2);
             vs.insert((0, 0), try!(VariationData::load_from_files(path,
-                "map_space01_00_00e.dat", "map_space01_00_00e.dat")));
+                "map_space01_00_00e.dat", "map_space01_00_00o.dat")));
             vs.insert((1, 0), try!(VariationData::load_from_files(path,
-                "map_space01_01_00e.dat", "map_space01_01_00e.dat")));
+                "map_space01_01_00e.dat", "map_space01_01_00o.dat")));
             vs
         };
         let space2 = {
             let mut vs = HashMap::with_capacity(2);
             vs.insert((0, 0), try!(VariationData::load_from_files(path,
-                "map_space02_00_00e.dat", "map_space02_00_00e.dat")));
+                "map_space02_00_00e.dat", "map_space02_00_00o.dat")));
             vs.insert((1, 0), try!(VariationData::load_from_files(path,
-                "map_space02_01_00e.dat", "map_space02_01_00e.dat")));
+                "map_space02_01_00e.dat", "map_space02_01_00o.dat")));
             vs
         };
         let jungle1 = {
@@ -170,7 +169,136 @@ impl Ep2Areas {
         })
     }
 
-    pub fn load_from_files_offline(_path: &str) -> io::Result<Ep2Areas> {
-        unimplemented!()
+    pub fn load_from_files_offline(path: &str) -> io::Result<Ep2Areas> {
+        let city = try!(VariationData::load_from_files(path,
+            "map_labo00_00e_s.dat", "map_labo00_00o_s.dat"));
+
+        let ruins1 = {
+            let mut vs = HashMap::with_capacity(2);
+            vs.insert((0, 0), try!(VariationData::load_from_files(path,
+                "map_ruins01_00_00_offe.dat", "map_ruins01_00_00o.dat")));
+            vs.insert((1, 0), try!(VariationData::load_from_files(path,
+                "map_ruins01_01_00_offe.dat", "map_ruins01_01_00o.dat")));
+            vs
+        };
+        let ruins2 = {
+            let mut vs = HashMap::with_capacity(2);
+            vs.insert((0, 0), try!(VariationData::load_from_files(path,
+                "map_ruins02_00_00_offe.dat", "map_ruins02_00_00o.dat")));
+            vs.insert((1, 0), try!(VariationData::load_from_files(path,
+                "map_ruins02_01_00_offe.dat", "map_ruins02_01_00o.dat")));
+            vs
+        };
+        let space1 = {
+            let mut vs = HashMap::with_capacity(2);
+            vs.insert((0, 0), try!(VariationData::load_from_files(path,
+                "map_space01_00_00_offe.dat", "map_space01_00_00o.dat")));
+            vs.insert((1, 0), try!(VariationData::load_from_files(path,
+                "map_space01_01_00_offe.dat", "map_space01_01_00o.dat")));
+            vs
+        };
+        let space2 = {
+            let mut vs = HashMap::with_capacity(2);
+            vs.insert((0, 0), try!(VariationData::load_from_files(path,
+                "map_space02_00_00_offe.dat", "map_space02_00_00o.dat")));
+            vs.insert((1, 0), try!(VariationData::load_from_files(path,
+                "map_space02_01_00_offe.dat", "map_space02_01_00o.dat")));
+            vs
+        };
+        let jungle1 = {
+            let mut vs = Vec::with_capacity(3);
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle01_00_offe.dat", "map_jungle01_00o.dat")));
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle01_01_offe.dat", "map_jungle01_01o.dat")));
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle01_02_offe.dat", "map_jungle01_02o.dat")));
+            vs
+        };
+        let jungle2 = {
+            let mut vs = Vec::with_capacity(3);
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle02_00_offe.dat", "map_jungle02_00o.dat")));
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle02_01_offe.dat", "map_jungle02_01o.dat")));
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle02_02_offe.dat", "map_jungle02_02o.dat")));
+            vs
+        };
+        let jungle3 = {
+            let mut vs = Vec::with_capacity(3);
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle03_00_offe.dat", "map_jungle03_00o.dat")));
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle03_01_offe.dat", "map_jungle03_01o.dat")));
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle03_02_offe.dat", "map_jungle03_02o.dat")));
+            vs
+        };
+        let jungle4 = {
+            let mut vs = HashMap::with_capacity(4);
+            vs.insert((0, 0), try!(VariationData::load_from_files(path,
+                "map_jungle04_00_00_offe.dat", "map_jungle04_00_00o.dat")));
+            vs.insert((0, 1), try!(VariationData::load_from_files(path,
+                "map_jungle04_00_01_offe.dat", "map_jungle04_00_01o.dat")));
+            vs.insert((1, 0), try!(VariationData::load_from_files(path,
+                "map_jungle04_01_00_offe.dat", "map_jungle04_01_00o.dat")));
+            vs.insert((1, 1), try!(VariationData::load_from_files(path,
+                "map_jungle04_01_01_offe.dat", "map_jungle04_01_01o.dat")));
+            vs
+        };
+        let jungle5 = {
+            let mut vs = Vec::with_capacity(3);
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle05_00_offe.dat", "map_jungle05_00o.dat")));
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle05_01_offe.dat", "map_jungle05_01o.dat")));
+            vs.push(try!(VariationData::load_from_files(path,
+                "map_jungle05_02_offe.dat", "map_jungle05_02o.dat")));
+            vs
+        };
+        let seabed1 = {
+            let mut vs = HashMap::with_capacity(2);
+            vs.insert((0, 0), try!(VariationData::load_from_files(path,
+                "map_seabed01_00_00_offe.dat", "map_seabed01_00_00o.dat")));
+            vs.insert((1, 0), try!(VariationData::load_from_files(path,
+                "map_seabed01_01_00_offe.dat", "map_seabed01_01_00o.dat")));
+            vs
+        };
+        let seabed2 = {
+            let mut vs = HashMap::with_capacity(2);
+            vs.insert((0, 0), try!(VariationData::load_from_files(path,
+                "map_seabed02_00_00_offe.dat", "map_seabed02_00_00o.dat")));
+            vs.insert((1, 0), try!(VariationData::load_from_files(path,
+                "map_seabed02_01_00_offe.dat", "map_seabed02_01_00o.dat")));
+            vs
+        };
+        let boss5 = try!(VariationData::load_from_files(path,
+            "map_boss05e.dat", "map_boss05_offo.dat"));
+        let boss6 = try!(VariationData::load_from_files(path,
+            "map_boss06e.dat", "map_boss06_offo.dat"));
+        let boss7 = try!(VariationData::load_from_files(path,
+            "map_boss07e.dat", "map_boss07_offo.dat"));
+        let boss8 = try!(VariationData::load_from_files(path,
+            "map_boss08e.dat", "map_boss08_offo.dat"));
+
+        Ok(Ep2Areas {
+            city: city,
+            ruins1: ruins1,
+            ruins2: ruins2,
+            space1: space1,
+            space2: space2,
+            jungle1: jungle1,
+            jungle2: jungle2,
+            jungle3: jungle3,
+            jungle4: jungle4,
+            jungle5: jungle5,
+            seabed1: seabed1,
+            seabed2: seabed2,
+            boss5: boss5,
+            boss6: boss6,
+            boss7: boss7,
+            boss8: boss8
+        })
     }
 }

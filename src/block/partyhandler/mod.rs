@@ -30,26 +30,26 @@ pub struct Party {
     pub single_player: bool,
     members: [Option<usize>; 4],
     leader_id: u8,
-    online_maps: Arc<Areas>,
+    maps: Arc<Areas>,
     variants: Vec<u32>,
     enemies: Vec<InstanceEnemy>
 }
 
 impl Party {
-    pub fn new(name: &str, password: Option<&str>, episode: u8, difficulty: u8, battle: bool, challenge: bool, single_player: bool, event: u16, online_maps: Arc<Areas>) -> Party {
+    pub fn new(name: &str, password: Option<&str>, episode: u8, difficulty: u8, battle: bool, challenge: bool, single_player: bool, event: u16, maps: Arc<Areas>) -> Party {
         // pick random variants for each map based on episode
         let (variants, enemies) = match episode {
             1 => {
                 info!("Generating episode 1 party");
-                Party::random_variants_ep1(&online_maps.ep1, event)
+                Party::random_variants_ep1(&maps.ep1, event, difficulty > 0)
             },
             2 => {
                 info!("Generating episode 2 party");
-                Party::random_variants_ep2(&online_maps.ep2, event)
+                Party::random_variants_ep2(&maps.ep2, event)
             },
             3 => {
                 info!("Generating episode 4 party");
-                Party::random_variants_ep4(&online_maps.ep4, event)
+                Party::random_variants_ep4(&maps.ep4, event)
             },
             _ => panic!("unsupported episode")
         };
@@ -64,7 +64,7 @@ impl Party {
             single_player: single_player,
             members: Default::default(),
             leader_id: 0,
-            online_maps: online_maps,
+            maps: maps,
             variants: variants,
             enemies: enemies
         }
@@ -102,6 +102,7 @@ impl Party {
         l.one2 = 1;
         l.difficulty = self.difficulty;
         l.episode = self.episode;
+        l.single_player = if self.single_player {1} else {0};
         let mut ph = PlayerHdr::default();
         ph.tag = 0x00010000;
         ph.guildcard = c.bb_guildcard;
@@ -295,7 +296,7 @@ impl Party {
         None
     }
 
-    fn random_variants_ep1(maps: &Ep1Areas, event: u16) -> (Vec<u32>, Vec<InstanceEnemy>) {
+    fn random_variants_ep1(maps: &Ep1Areas, event: u16, normal: bool) -> (Vec<u32>, Vec<InstanceEnemy>) {
         let mut variants = vec![0; 0x20];
         let mut enemies = Vec::with_capacity(0xB50);
         Party::append_enemies(&maps.city.enemies, &mut enemies, 1, event, false);
@@ -360,6 +361,14 @@ impl Party {
         Party::append_enemies(&maps.boss2.enemies, &mut enemies, 1, event, false);
         Party::append_enemies(&maps.boss3.enemies, &mut enemies, 1, event, false);
         Party::append_enemies(&maps.boss4.enemies, &mut enemies, 1, event, false);
+
+        if !normal {
+            // Dark Falz has a different param entry on Hard+ because of third phase
+            for e in enemies.iter_mut().filter(|e| e.param_entry == 0x37) {
+                e.param_entry = 0x38;
+            }
+        }
+
         (variants, enemies)
     }
 

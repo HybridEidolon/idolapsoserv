@@ -32,7 +32,8 @@ pub struct BlockHandler {
     lobbies: Rc<RefCell<Vec<Lobby>>>,
     parties: Rc<RefCell<Vec<Party>>>,
     pub battle_params: Arc<BattleParamTables>,
-    online_maps: Arc<Areas>
+    online_maps: Arc<Areas>,
+    offline_maps: Arc<Areas>
 }
 
 impl BlockHandler {
@@ -43,7 +44,8 @@ impl BlockHandler {
                lobbies: Rc<RefCell<Vec<Lobby>>>,
                parties: Rc<RefCell<Vec<Party>>>,
                battle_params: Arc<BattleParamTables>,
-               online_maps: Arc<Areas>) -> BlockHandler {
+               online_maps: Arc<Areas>,
+               offline_maps: Arc<Areas>) -> BlockHandler {
         BlockHandler {
             sender: sender,
             sg_sender: sg_sender,
@@ -52,7 +54,8 @@ impl BlockHandler {
             lobbies: lobbies,
             parties: parties,
             battle_params: battle_params,
-            online_maps: online_maps
+            online_maps: online_maps,
+            offline_maps: offline_maps
         }
     }
 
@@ -158,7 +161,7 @@ impl BlockHandler {
                             }
                             // fc = ::util::nsc::read_nsc(&mut File::open("data/default/default_0.nsc").unwrap(), CharClass::HUmar).unwrap();
                             fc = BbFullCharData::default();
-                            fc.inv.item_count = 2;
+                            fc.inv.item_count = 6;
                             fc.inv.hp_mats = 255;
                             fc.inv.tp_mats = 255;
                             // fc.inv.lang = 255;
@@ -173,13 +176,39 @@ impl BlockHandler {
                             // fc.inv.tp_mats = 127;
                             fc.inv.items[0].exists = 0x01;
                             fc.inv.items[0].flags = 0x8;
-                            fc.inv.items[0].data.data[1] = 0x01;
+                            //0x001200
+                            fc.inv.items[0].data.data[0] = 0x00;
+                            fc.inv.items[0].data.data[1] = 0x12;
                             fc.inv.items[0].data.item_id = 0x00010000;
 
                             fc.inv.items[1].exists = 0x01;
                             fc.inv.items[1].flags = 0;
                             fc.inv.items[1].data.data[1] = 0x01;
                             fc.inv.items[1].data.item_id = 0x00010001;
+
+                            fc.inv.items[2].exists = 0x01;
+                            fc.inv.items[2].flags = 0;
+                            fc.inv.items[2].data.data[0] = 0x03; //monomate
+                            fc.inv.items[2].data.data[5] = 10; //stack
+
+                            fc.inv.items[3].exists = 0x01;
+                            fc.inv.items[3].flags = 0;
+                            fc.inv.items[3].data.data[0] = 0x03; //dimate
+                            fc.inv.items[3].data.data[2] = 0x01;
+                            fc.inv.items[3].data.data[5] = 10; //stack
+
+                            fc.inv.items[4].exists = 0x01;
+                            fc.inv.items[4].flags = 0;
+                            fc.inv.items[4].data.data[0] = 0x03; //trimate
+                            fc.inv.items[4].data.data[2] = 0x02;
+                            fc.inv.items[4].data.data[5] = 10; //stack
+
+                            // 0x000303 sol atomizer
+                            fc.inv.items[5].exists = 0x01;
+                            fc.inv.items[5].flags = 0;
+                            fc.inv.items[5].data.data[0] = 0x03;
+                            fc.inv.items[5].data.data[1] = 0x03;
+                            fc.inv.items[5].data.data[5] = 10; // stack
 
                             fc.name = "Rico".to_string();
                             fc.chara.name = "Rico".to_string();
@@ -200,9 +229,9 @@ impl BlockHandler {
                             fc.chara.stats.mst = 3000;
                             fc.chara.stats.lck = 3000;
                             fc.section = 3;
-                            fc.class = 1;
+                            fc.class = 3;
                             fc.chara.section = 3;
-                            fc.chara.class = 1;
+                            fc.chara.class = 3;
                             fc.chara.model = 1;
                             fc.chara.model_flag = 8;
                             fc.chara.costume = 1;
@@ -250,7 +279,7 @@ impl BlockHandler {
         }
 
         info!("Unable to add client {} to a lobby because they're all full.", self.client_id);
-        self.send_fatal_error(self.client_id, "All lobbies on this block are full. Please try again.");
+        self.send_fatal_error(self.client_id, "\tEAll lobbies on this block are full. Please try again.");
     }
 
     pub fn bb_chat(&mut self, mut m: BbChat) {
@@ -305,10 +334,6 @@ impl BlockHandler {
             self.send_error(self.client_id, "\tEChallenge mode is not\nsupported yet. Sorry!");
             return
         }
-        if m.single_player != 0 {
-            self.send_error(self.client_id, "\tEOffline mode maps are\nnot loaded yet. WIP");
-            return
-        }
 
         // we first want to remove them from their lobby...
         let mut event = 0xFFFF;
@@ -332,7 +357,12 @@ impl BlockHandler {
 
         // create the party
         let pass: Option<&str> = if m.password.len() == 0 { None } else { Some(&m.password) };
-        let mut p = Party::new(&m.name, pass, m.episode, m.difficulty, m.battle != 0, m.challenge != 0, m.single_player != 0, event, self.online_maps.clone());
+        let mut p;
+        if m.single_player > 0 {
+            p = Party::new(&m.name, pass, m.episode, m.difficulty, m.battle != 0, m.challenge != 0, true, event, self.offline_maps.clone());
+        } else {
+            p = Party::new(&m.name, pass, m.episode, m.difficulty, m.battle != 0, m.challenge != 0, false, event, self.online_maps.clone());
+        }
 
         let cid = self.client_id;
         p.add_player(self, cid).unwrap();
