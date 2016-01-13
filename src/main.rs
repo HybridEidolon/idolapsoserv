@@ -121,20 +121,11 @@ fn main() {
     let level_table;
     {
         let mut f = File::open(format!("{}/param/PlyLevelTbl.prs", config.data_path)).expect("Unable to open PlyLevelTbl.prs");
-        let mut decomp_cursor = Cursor::new(decompress_prs(&mut f).expect("Unable to decompress PlyLevelTbl.prs"));
+        let decomp = decompress_prs(&mut f).expect("Unable to decompress PlyLevelTbl.prs");
+        let mut decomp_cursor = Cursor::new(decomp);
         level_table = Arc::new(LevelTable::deserialize(&mut decomp_cursor).expect("Unable to parse decompressed PlyLevelTbl.prs"));
     }
-
-    {
-        println!("Starting stats:");
-        for t in level_table.start_stats.iter() {
-            println!("{:?}", t);
-        }
-        println!("Level stats (class 0)");
-        for t in level_table.levels[0].iter() {
-            println!("{:?}", t);
-        }
-    }
+    info!("Loaded BB PlyLevelTbl stats information from path: {}/param/PlyLevelTbl.prs", config.data_path);
 
     let mut event_loop = EventLoop::new().expect("Could not create event loop");
     info!("Socket event loop created.");

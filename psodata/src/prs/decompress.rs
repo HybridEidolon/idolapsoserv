@@ -58,10 +58,11 @@ pub fn decompress(src: &mut Read) -> io::Result<Vec<u8>> {
                     break
                 }
                 size = (offset & 0x0007) as u32;
-                offset = offset.wrapping_shr(3);
+                offset >>= 3;
                 if size == 0 {
                     // Next byte is actual size
                     size = try!(ctx.src.read_u8()) as u32;
+                    size += 1;
                 } else {
                     size += 2;
                 }
@@ -81,7 +82,7 @@ pub fn decompress(src: &mut Read) -> io::Result<Vec<u8>> {
         }
 
         // Copy duplicate bytes
-        for _ in 0..(size+1) {
+        for _ in 0..(size) {
             try!(ctx.dst.seek(SeekFrom::Current(offset as i64)));
             let b = try!(ctx.dst.read_u8());
             try!(ctx.dst.seek(SeekFrom::Current(-1)));
