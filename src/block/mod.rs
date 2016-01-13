@@ -193,6 +193,9 @@ impl BlockService {
                         Message::BbGameName(_, _) => { h.bb_game_name() },
                         Message::BbGameList(_, _) => { h.bb_game_list() },
                         Message::BbPlayerLeaveGame(_, m) => { h.bb_player_leave_game(m) },
+                        Message::BbUpdateOptions(_, m) => { h.bb_update_options(m) },
+                        Message::BbUpdateKeys(_, m) => { h.bb_update_keys(m) },
+                        Message::BbUpdateJoy(_, m) => { h.bb_update_joy(m) },
                         a => {
                             info!("{:?}", a);
                         }

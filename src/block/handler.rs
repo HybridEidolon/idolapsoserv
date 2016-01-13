@@ -139,6 +139,7 @@ impl BlockHandler {
                         c.sec_data = sec_data.clone();
                         c.team_id = a.team_id;
                         c.bb_guildcard = a.guildcard_num;
+                        c.account_id = a.account_id;
 
                         let mut fc: BbFullCharData;
                         {
@@ -218,13 +219,10 @@ impl BlockHandler {
                             fc.chara.name = "Rico".to_string();
                             fc.guildcard = a.guildcard_num;
                             fc.chara.guildcard = format!("  {}", a.guildcard_num);
-                            // fc.team_name = "\tEFlowen".to_string();
-                            //fc.key_config = Default::default();
+                            fc.option_flags = a.options;
+                            fc.key_config.key_config = a.key_config.clone();
+                            fc.key_config.joy_config = a.joy_config.clone();
                             fc.key_config.team_id = 0;
-                            // fc.key_config.team_name = fc.team_name.clone();
-                            // fc.key_config.guildcard = a.guildcard_num;
-                            //fc.key_config.team_rewards = 0xFFFFFFFF;
-                            // fc.chara.level = 199;
                             fc.chara.stats.hp = 3000;
                             fc.chara.stats.atp = 3000;
                             fc.chara.stats.dfp = 3000;
@@ -595,6 +593,41 @@ impl BlockHandler {
                 self.send_fatal_error(self.client_id, "\tEIllegal message");
             }
         }
+    }
 
+    pub fn bb_update_options(&mut self, m: BbUpdateOptions) {
+        use ::shipgate::msg::BbUpdateOptions as SgBbUO;
+        info!("{} updated general options", self.client_id);
+        let options = m.0;
+        let cr = self.get_client_state(self.client_id).unwrap();
+        let ref client_state = cr.borrow();
+        self.sg_sender.send(Sgm::BbUpdateOptions(0, SgBbUO {
+            account_id: client_state.account_id,
+            options: options
+        })).unwrap();
+    }
+
+    pub fn bb_update_keys(&mut self, m: BbUpdateKeys) {
+        use ::shipgate::msg::BbUpdateKeys as SgBbUK;
+        info!("{} updated keyboard configuration", self.client_id);
+        let keys = m.0;
+        let cr = self.get_client_state(self.client_id).unwrap();
+        let ref client_state = cr.borrow();
+        self.sg_sender.send(Sgm::BbUpdateKeys(0, SgBbUK {
+            account_id: client_state.account_id,
+            key_config: keys
+        })).unwrap();
+    }
+
+    pub fn bb_update_joy(&mut self, m: BbUpdateJoy) {
+        use ::shipgate::msg::BbUpdateJoy as SgBbJ;
+        info!("{} updated joystick configuration", self.client_id);
+        let joy = m.0;
+        let cr = self.get_client_state(self.client_id).unwrap();
+        let ref client_state = cr.borrow();
+        self.sg_sender.send(Sgm::BbUpdateJoy(0, SgBbJ {
+            account_id: client_state.account_id,
+            joy_config: joy
+        })).unwrap();
     }
 }

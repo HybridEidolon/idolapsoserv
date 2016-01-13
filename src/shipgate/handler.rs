@@ -67,7 +67,7 @@ impl<'a> MsgHandler<'a> {
             Ok(h) => h,
             Err(e) => {
                 error!("Database error locking connection handle: {:?}", e);
-                return BbGetAccountInfoAck { status: 1, account_id: account_id, guildcard_num: 0, team_id: 0 }.into()
+                return BbGetAccountInfoAck::default().into()
             }
         };
 
@@ -75,16 +75,19 @@ impl<'a> MsgHandler<'a> {
             Ok(h) => h,
             Err(e) => {
                 error!("Database error locking connection handle: {:?}", e);
-                return BbGetAccountInfoAck { status: 2, account_id: account_id, guildcard_num: 0, team_id: 0 }.into()
+                return BbGetAccountInfoAck::default().into()
             }
         };
 
         let info: BbAccountInfo = match handle.fetch_bb_account_info(account_id) {
             Ok(Some(a)) => a,
-            Ok(None) => unreachable!(),
+            Ok(None) => {
+                error!("Account doesn't exist");
+                return BbGetAccountInfoAck::default().into()
+            },
             Err(e) => {
                 error!("Database error getting Bb account info: {:?}", e);
-                return BbGetAccountInfoAck { status: 3, account_id: account_id, guildcard_num: 0, team_id: 0 }.into()
+                return BbGetAccountInfoAck::default().into()
             }
         };
 
@@ -92,7 +95,121 @@ impl<'a> MsgHandler<'a> {
             status: 0,
             account_id: info.account_id,
             guildcard_num: info.guildcard_num,
-            team_id: info.team_id
+            team_id: info.team_id,
+            options: info.options,
+            key_config: info.key_config.clone(),
+            joy_config: info.joy_config.clone()
         }.into()
+    }
+
+    pub fn handle_bb_update_options(&mut self, m: BbUpdateOptions) {
+        let a = match self.pool.get_connection() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("Database error locking connection handle: {:?}", e);
+                return
+            }
+        };
+        let handle = match a.lock() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("Database error locking connection handle: {:?}", e);
+                return
+            }
+        };
+        let mut info: BbAccountInfo = match handle.fetch_bb_account_info(m.account_id) {
+            Ok(Some(a)) => a,
+            Ok(None) => {
+                error!("Account doesn't exist; not updating account options");
+                return
+            },
+            Err(e) => {
+                error!("Database error getting Bb account info: {:?}", e);
+                return
+            }
+        };
+
+        info.options = m.options;
+        match handle.put_bb_account_info(&info) {
+            Ok(_) => (),
+            Err(e) => {
+                error!("Couldn't update account options: {:?}", e);
+                return
+            }
+        }
+    }
+
+    pub fn handle_bb_update_keys(&mut self, m: BbUpdateKeys) {
+        let a = match self.pool.get_connection() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("Database error locking connection handle: {:?}", e);
+                return
+            }
+        };
+        let handle = match a.lock() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("Database error locking connection handle: {:?}", e);
+                return
+            }
+        };
+        let mut info: BbAccountInfo = match handle.fetch_bb_account_info(m.account_id) {
+            Ok(Some(a)) => a,
+            Ok(None) => {
+                error!("Account doesn't exist; not updating account key config");
+                return
+            },
+            Err(e) => {
+                error!("Database error getting Bb account info: {:?}", e);
+                return
+            }
+        };
+
+        info.key_config = m.key_config;
+        match handle.put_bb_account_info(&info) {
+            Ok(_) => (),
+            Err(e) => {
+                error!("Couldn't update account options: {:?}", e);
+                return
+            }
+        }
+    }
+
+    pub fn handle_bb_update_joy(&mut self, m: BbUpdateJoy) {
+        let a = match self.pool.get_connection() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("Database error locking connection handle: {:?}", e);
+                return
+            }
+        };
+        let handle = match a.lock() {
+            Ok(h) => h,
+            Err(e) => {
+                error!("Database error locking connection handle: {:?}", e);
+                return
+            }
+        };
+        let mut info: BbAccountInfo = match handle.fetch_bb_account_info(m.account_id) {
+            Ok(Some(a)) => a,
+            Ok(None) => {
+                error!("Account doesn't exist; not updating account joystick config");
+                return
+            },
+            Err(e) => {
+                error!("Database error getting Bb account info: {:?}", e);
+                return
+            }
+        };
+
+        info.joy_config = m.joy_config;
+        match handle.put_bb_account_info(&info) {
+            Ok(_) => (),
+            Err(e) => {
+                error!("Couldn't update account options: {:?}", e);
+                return
+            }
+        }
     }
 }

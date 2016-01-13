@@ -505,7 +505,7 @@ impl Party {
         let mut enemies = Vec::new();
         Party::append_enemies(&maps.city.enemies, &mut enemies, 3, event, false);
 
-        variants[2] = (random::<usize>() % maps.wilds1.len()) as u32;
+        variants[3] = (random::<usize>() % maps.wilds1.len()) as u32;
         variants[5] = (random::<usize>() % maps.wilds2.len()) as u32;
         variants[7] = (random::<usize>() % maps.wilds3.len()) as u32;
         variants[9] = (random::<usize>() % maps.wilds4.len()) as u32;
@@ -514,7 +514,7 @@ impl Party {
         variants[15] = (random::<usize>() % maps.desert2.len()) as u32;
         variants[16] = (random::<usize>() % maps.desert3.len()) as u32;
 
-        Party::append_enemies(&maps.wilds1[variants[2] as usize].enemies, &mut enemies, 3, event, false);
+        Party::append_enemies(&maps.wilds1[variants[3] as usize].enemies, &mut enemies, 3, event, false);
         Party::append_enemies(&maps.wilds2[variants[5] as usize].enemies, &mut enemies, 3, event, false);
         Party::append_enemies(&maps.wilds3[variants[7] as usize].enemies, &mut enemies, 3, event, false);
         Party::append_enemies(&maps.wilds4[variants[9] as usize].enemies, &mut enemies, 3, event, false);

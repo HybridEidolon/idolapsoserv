@@ -206,5 +206,8 @@ gen_message_enum! {
     0x03EB => BbParamChunkReq,
     0x04EB => BbParamHdrReq,
     0x00EC => BbSetFlags,
+    0x01ED => BbUpdateOptions,
+    0x04ED => BbUpdateKeys,
+    0x05ED => BbUpdateJoy,
     0x00EE => BbScrollMsg
 }

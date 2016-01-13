@@ -145,7 +145,10 @@ impl_shipgate_message_enum! {
     6 => RegisterShip,
     7 => RegisterShipAck,
     8 => ShipList,
-    9 => ShipListAck
+    9 => ShipListAck,
+    10 => BbUpdateOptions,
+    11 => BbUpdateKeys,
+    12 => BbUpdateJoy
 }
 
 #[derive(Clone, Debug)]
@@ -199,12 +202,63 @@ derive_serial! {
     }
 }
 
-derive_serial! {
-    BbGetAccountInfoAck {
-        pub status: u32,
-        pub account_id: u32,
-        pub guildcard_num: u32,
-        pub team_id: u32
+#[derive(Clone, Debug)]
+pub struct BbGetAccountInfoAck {
+    pub status: u32,
+    pub account_id: u32,
+    pub guildcard_num: u32,
+    pub team_id: u32,
+    pub options: u32,
+    pub key_config: Vec<u8>,
+    pub joy_config: Vec<u8>
+}
+impl Serial for BbGetAccountInfoAck {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.status.serialize(dst));
+        try!(self.account_id.serialize(dst));
+        try!(self.guildcard_num.serialize(dst));
+        try!(self.team_id.serialize(dst));
+        try!(self.options.serialize(dst));
+        try!((self.key_config.len() as u32).serialize(dst));
+        try!(write_array(&self.key_config, self.key_config.len() as u32, dst));
+        try!((self.joy_config.len() as u32).serialize(dst));
+        try!(write_array(&self.joy_config, self.joy_config.len() as u32, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let status = try!(Serial::deserialize(src));
+        let account_id = try!(Serial::deserialize(src));
+        let guildcard_num = try!(Serial::deserialize(src));
+        let team_id = try!(Serial::deserialize(src));
+        let options = try!(Serial::deserialize(src));
+        let key_config_len = try!(u32::deserialize(src));
+        let key_config = try!(read_array(key_config_len, src));
+        let joy_config_len = try!(u32::deserialize(src));
+        let joy_config = try!(read_array(joy_config_len, src));
+        Ok(BbGetAccountInfoAck {
+            status: status,
+            account_id: account_id,
+            guildcard_num: guildcard_num,
+            team_id: team_id,
+            options: options,
+            key_config: key_config,
+            joy_config: joy_config
+        })
+    }
+}
+
+impl Default for BbGetAccountInfoAck {
+    fn default() -> BbGetAccountInfoAck {
+        BbGetAccountInfoAck {
+            status: 1,
+            account_id: 0,
+            guildcard_num: 0,
+            team_id: 0,
+            options: 0,
+            key_config: Vec::new(),
+            joy_config: Vec::new()
+        }
     }
 }
 
@@ -259,5 +313,60 @@ impl Serial for ShipListAck {
             ships.push((socketaddr, name));
         }
         Ok(ShipListAck(ships))
+    }
+}
+
+derive_serial_default! {
+    BbUpdateOptions {
+        pub account_id: u32,
+        pub options: u32
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BbUpdateKeys {
+    pub account_id: u32,
+    pub key_config: Vec<u8>
+}
+impl Serial for BbUpdateKeys {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.account_id.serialize(dst));
+        try!((self.key_config.len() as u32).serialize(dst));
+        try!(write_array(&self.key_config, self.key_config.len() as u32, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let account_id = try!(Serial::deserialize(src));
+        let kc_len = try!(u32::deserialize(src));
+        let key_config = try!(read_array(kc_len, src));
+        Ok(BbUpdateKeys {
+            account_id: account_id,
+            key_config: key_config
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BbUpdateJoy {
+    pub account_id: u32,
+    pub joy_config: Vec<u8>
+}
+impl Serial for BbUpdateJoy {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.account_id.serialize(dst));
+        try!((self.joy_config.len() as u32).serialize(dst));
+        try!(write_array(&self.joy_config, self.joy_config.len() as u32, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let account_id = try!(Serial::deserialize(src));
+        let kc_len = try!(u32::deserialize(src));
+        let joy_config = try!(read_array(kc_len, src));
+        Ok(BbUpdateJoy {
+            account_id: account_id,
+            joy_config: joy_config
+        })
     }
 }

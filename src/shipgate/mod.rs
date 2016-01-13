@@ -98,28 +98,42 @@ impl ShipGateService {
 
                     if c.authenticated {
                         let mut handler = MsgHandler::new(self.pool.clone(), c);
-                        let (req, mut response): (u32, Message) = match m {
+                        let response: Option<(u32, Message)> = match m {
                             Message::BbLoginChallenge(req, body) => {
-                                (req, handler.handle_login_challenge(body).into())
+                                Some((req, handler.handle_login_challenge(body).into()))
                             },
                             Message::BbGetAccountInfo(req, body) => {
-                                (req, handler.handle_get_bb_account_info(body).into())
+                                Some((req, handler.handle_get_bb_account_info(body).into()))
                             },
                             Message::RegisterShip(req, body) => {
                                 // Register the ship.
                                 info!("Ship {} at {:?} registered", body.1, body.0);
                                 self.ships.insert(id, (body.0, body.1));
-                                (req, RegisterShipAck.into())
+                                Some((req, RegisterShipAck.into()))
                             },
                             Message::ShipList(req, _) => {
                                 let ships: Vec<_> = self.ships.values().map(|v| v.clone()).collect();
-                                (req, ShipListAck(ships).into())
+                                Some((req, ShipListAck(ships).into()))
+                            },
+                            Message::BbUpdateOptions(_, body) => {
+                                handler.handle_bb_update_options(body);
+                                None
+                            },
+                            Message::BbUpdateKeys(_, body) => {
+                                handler.handle_bb_update_keys(body);
+                                None
+                            },
+                            Message::BbUpdateJoy(_, body) => {
+                                handler.handle_bb_update_joy(body);
+                                None
                             }
                             _ => unimplemented!()
                         };
-                        debug!("Client Request {} received from client {}", req, id);
-                        response.set_response_key(req);
-                        self.sender.send((id, response).into()).unwrap();
+                        if let Some((req, mut response)) = response {
+                            debug!("Client Request {} received from client {}", req, id);
+                            response.set_response_key(req);
+                            self.sender.send((id, response).into()).unwrap();
+                        }
                     } else {
                         if let Message::Auth(res, Auth(version, pw)) = m {
                             if version == 0 && pw == self.password {

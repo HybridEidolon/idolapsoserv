@@ -46,7 +46,6 @@ impl BbLoginHandler {
         // and verify credentials, then forward to any of
         // the ships for the character step.
         let sec_data = m.security_data.clone();
-        info!("Blue Burst Login challenge: {:?}", m);
         let sm = BbLoginChallenge { username: m.username.clone(), password: m.password.clone() };
         self.sg_sender.request(self.client_id, sm, move|mut h, sm| {
             if let Sgm::BbLoginChallengeAck(_, sm) = sm {
@@ -78,7 +77,6 @@ impl BbLoginHandler {
 
                         // If the magic code in the client's security data is 0, we need to redirect to self
                         if sec_data.magic != 0xCAFEB00B {
-                            info!("Client {} is fresh {:?}", h.client_id, sec_data);
                             let mut sec_data: BbSecurityData = Default::default();
                             sec_data.magic = 0xCAFEB00B;
 
@@ -110,13 +108,15 @@ impl BbLoginHandler {
                             h.sender.send((h.client_id, r).into()).unwrap();
                         } else {
                             // Client already has a session; we'll capture their security data.
-                            info!("Existing session on client with sec data: {:?}", sec_data);
                             {
                                 let mut b = h.clients.borrow_mut();
                                 let mut c = b.get_mut(&h.client_id).unwrap();
                                 c.sec_data = sec_data.clone();
                                 c.bb_guildcard = sm.guildcard_num;
                                 c.team_id = sm.team_id;
+                                c.options = sm.options;
+                                c.key_config = sm.key_config.clone();
+                                c.joy_config = sm.joy_config.clone();
                             }
 
                             let r = Message::BbSecurity(0, BbSecurity {
@@ -182,8 +182,14 @@ impl BbLoginHandler {
 
     pub fn bb_option_request(&mut self) {
         // Send the key bindings for this account.
-        // TODO save and restore from shipgate
-        let r = Message::BbOptionConfig(0, BbOptionConfig(BbTeamAndKeyData::default()));
+        let mut data = BbTeamAndKeyData::default();
+        let cid = self.client_id;
+        let clients = self.clients.borrow();
+        let client_state = clients.get(&cid).unwrap();
+
+        data.key_config = client_state.key_config.clone();
+        data.joy_config = client_state.joy_config.clone();
+        let r = Message::BbOptionConfig(0, BbOptionConfig(data));
         self.sender.send((self.client_id, r).into()).unwrap();
     }
 

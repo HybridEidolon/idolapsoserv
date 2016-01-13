@@ -584,6 +584,45 @@ impl Serial for BbChat {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct BbUpdateOptions(pub u32);
+impl Serial for BbUpdateOptions {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.0.serialize(dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        Ok(BbUpdateOptions(try!(Serial::deserialize(src))))
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BbUpdateKeys(pub Vec<u8>);
+impl Serial for BbUpdateKeys {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(write_array(&self.0, 364, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        Ok(BbUpdateKeys(try!(read_array(364, src))))
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BbUpdateJoy(pub Vec<u8>);
+impl Serial for BbUpdateJoy {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(write_array(&self.0, 56, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        Ok(BbUpdateJoy(try!(read_array(56, src))))
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BbTeamInfo {
     pub guildcard: u32,

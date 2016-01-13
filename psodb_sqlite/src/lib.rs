@@ -154,14 +154,17 @@ impl Backend for Sqlite {
 
     fn fetch_bb_account_info(&self, account_id: u32) -> Result<Option<BbAccountInfo>> {
         let mut stmt = try_db!(self.conn.prepare(
-            "SELECT id,team_id FROM bb_guildcard WHERE account_id=? LIMIT 1"
+            "SELECT id,team_id,options,key_config,joy_config FROM bb_guildcard WHERE account_id=? LIMIT 1"
         ));
 
         let mut results = try_db!(stmt.query_map(&[&(account_id as i64)], |row| {
             BbAccountInfo {
                 account_id: account_id,
                 guildcard_num: row.get::<i64>(0) as u32,
-                team_id: row.get::<i64>(1) as u32
+                team_id: row.get::<i64>(1) as u32,
+                options: row.get::<i64>(2) as u32,
+                key_config: row.get::<Vec<u8>>(3),
+                joy_config: row.get::<Vec<u8>>(4)
             }
         }));
 
@@ -184,8 +187,9 @@ impl Backend for Sqlite {
         let id = info.account_id as i64;
         let gcnum = info.guildcard_num as i64;
         let team = info.team_id as i64;
-        let mut stmt = try_db!(self.conn.prepare("INSERT OR REPLACE INTO bb_guildcard (id,account_id,team_id) VALUES (?,?,?)"));
-        try_db!(stmt.execute(&[&gcnum, &id, &team]));
+        let options = info.options as i64;
+        let mut stmt = try_db!(self.conn.prepare("INSERT OR REPLACE INTO bb_guildcard (id,account_id,team_id,options,key_config,joy_config) VALUES (?,?,?,?,?,?)"));
+        try_db!(stmt.execute(&[&gcnum, &id, &team, &options, &info.key_config, &info.joy_config]));
         Ok(())
     }
 }
