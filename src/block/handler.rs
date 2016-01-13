@@ -1,6 +1,6 @@
 use std::rc::Rc;
 use std::sync::Arc;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 //use std::fs::File;
 
@@ -35,7 +35,8 @@ pub struct BlockHandler {
     pub battle_params: Arc<BattleParamTables>,
     online_maps: Arc<Areas>,
     offline_maps: Arc<Areas>,
-    pub level_table: Arc<LevelTable>
+    pub level_table: Arc<LevelTable>,
+    party_counter: Rc<Cell<u32>>
 }
 
 impl BlockHandler {
@@ -48,7 +49,8 @@ impl BlockHandler {
                battle_params: Arc<BattleParamTables>,
                online_maps: Arc<Areas>,
                offline_maps: Arc<Areas>,
-               level_table: Arc<LevelTable>) -> BlockHandler {
+               level_table: Arc<LevelTable>,
+               party_counter: Rc<Cell<u32>>) -> BlockHandler {
         BlockHandler {
             sender: sender,
             sg_sender: sg_sender,
@@ -59,7 +61,8 @@ impl BlockHandler {
             battle_params: battle_params,
             online_maps: online_maps,
             offline_maps: offline_maps,
-            level_table: level_table
+            level_table: level_table,
+            party_counter: party_counter
         }
     }
 
@@ -267,6 +270,13 @@ impl BlockHandler {
         }).unwrap();
     }
 
+    fn get_new_party_id(&mut self) -> u32 {
+        let pcr = self.party_counter.clone();
+        let ret = pcr.get();
+        pcr.set(ret + 1);
+        ret
+    }
+
     pub fn bb_char_dat(&mut self, _m: BbCharDat) {
         // They are joining a lobby now. Find an empty lobby.
         let lr = self.lobbies.clone();
@@ -358,12 +368,13 @@ impl BlockHandler {
         }
 
         // create the party
+        let unique_id = self.get_new_party_id();
         let pass: Option<&str> = if m.password.len() == 0 { None } else { Some(&m.password) };
         let mut p;
         if m.single_player > 0 {
-            p = Party::new(&m.name, pass, m.episode, m.difficulty, m.battle != 0, m.challenge != 0, true, event, self.offline_maps.clone());
+            p = Party::new(&m.name, pass, m.episode, m.difficulty, m.battle != 0, m.challenge != 0, true, event, self.offline_maps.clone(), unique_id);
         } else {
-            p = Party::new(&m.name, pass, m.episode, m.difficulty, m.battle != 0, m.challenge != 0, false, event, self.online_maps.clone());
+            p = Party::new(&m.name, pass, m.episode, m.difficulty, m.battle != 0, m.challenge != 0, false, event, self.online_maps.clone(), unique_id);
         }
 
         let cid = self.client_id;
@@ -400,14 +411,14 @@ impl BlockHandler {
         self.send_fatal_error(self.client_id, "\tEIllegal message");
     }
 
-    pub fn bb_subcmd_62(&mut self, m: BbSubCmd62) {
+    pub fn bb_subcmd_62(&mut self, dest: u32, m: BbSubCmd62) {
         {
             let lr = self.lobbies.clone();
             let ref mut lobbies = lr.borrow_mut();
             for l in lobbies.iter_mut() {
                 let cid = self.client_id;
                 if l.has_player(cid) {
-                    l.handle_bb_subcmd_62(self, m).unwrap();
+                    l.handle_bb_subcmd_62(self, dest, m).unwrap();
                     return
                 }
             }
@@ -418,7 +429,7 @@ impl BlockHandler {
             for p in parties.iter_mut() {
                 let cid = self.client_id;
                 if p.has_player(cid) {
-                    p.handle_bb_subcmd_62(self, m).unwrap();
+                    p.handle_bb_subcmd_62(self, dest, m).unwrap();
                     return
                 }
             }
@@ -456,14 +467,14 @@ impl BlockHandler {
         self.send_fatal_error(self.client_id, "\tEIllegal message");
     }
 
-    pub fn bb_subcmd_6d(&mut self, m: BbSubCmd6D) {
+    pub fn bb_subcmd_6d(&mut self, dest: u32, m: BbSubCmd6D) {
         {
             let lr = self.lobbies.clone();
             let ref mut lobbies = lr.borrow_mut();
             for l in lobbies.iter_mut() {
                 let cid = self.client_id;
                 if l.has_player(cid) {
-                    l.handle_bb_subcmd_6d(self, m).unwrap();
+                    l.handle_bb_subcmd_6d(self, dest, m).unwrap();
                     return
                 }
             }
@@ -474,7 +485,7 @@ impl BlockHandler {
             for p in parties.iter_mut() {
                 let cid = self.client_id;
                 if p.has_player(cid) {
-                    p.handle_bb_subcmd_6d(self, m).unwrap();
+                    p.handle_bb_subcmd_6d(self, dest, m).unwrap();
                     return
                 }
             }
@@ -536,10 +547,10 @@ impl BlockHandler {
         game.flags = 0x4;
         games.push(game);
 
-        for (i, p) in parties.iter().enumerate() {
+        for p in parties.iter(){
             let mut game = BbGameListEntry::default();
             game.menu_id = MENU_GAME_LIST;
-            game.item_id = i as u32;
+            game.item_id = p.unique_id as u32;
             game.name = p.name.clone();
             game.episode = (4 << 4) | p.episode;
             game.difficulty = 0x22 + p.difficulty;
@@ -629,5 +640,48 @@ impl BlockHandler {
             account_id: client_state.account_id,
             joy_config: joy
         })).unwrap();
+    }
+
+    pub fn menu_select(&mut self, m: MenuSelect) {
+        let MenuSelect(menu_id, item_id) = m;
+        match menu_id {
+            MENU_GAME_LIST => {
+                let pr = self.parties.clone();
+                let mut parties = pr.borrow_mut();
+                for p in parties.iter_mut() {
+                    if p.unique_id == item_id {
+                        let cid = self.client_id;
+                        // First, verify they can join the game
+                        // TODO verify
+
+                        // Then, remove them from their lobby
+                        let lr = self.lobbies.clone();
+                        let mut lobbies = lr.borrow_mut();
+                        for l in lobbies.iter_mut() {
+                            if l.has_player(cid) {
+                                if let Err(e) = l.remove_player(self, cid) {
+                                    error!("Failed to remove player from lobby after party join: {:?}", e);
+                                    self.send_fatal_error(self.client_id, &format!("\tE{:?}", e));
+                                    return
+                                }
+                                break
+                            }
+                        }
+                        // Then add them to their game
+                        if let Err(e) = p.add_player(self, cid) {
+                            error!("Failed to join party: {:?}", e);
+                            self.send_fatal_error(self.client_id, &format!("\tE{:?}", e));
+                            return
+                        }
+                        break
+                    }
+                }
+                self.send_error(self.client_id, "\tEParty no longer\texists.");
+            },
+            _ => {
+                self.send_error(self.client_id, "\tEInvalid menu");
+                return
+            }
+        }
     }
 }

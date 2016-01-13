@@ -90,6 +90,8 @@ impl Lobby {
             lm.hdr.guildcard = c.bb_guildcard;
             lm.hdr.client_id = new_client_id as u32;
             lm.hdr.name = c.full_char.as_ref().unwrap().chara.name.clone();
+            lm.inventory = c.full_char.as_ref().unwrap().inv.clone();
+            lm.data = c.full_char.as_ref().unwrap().chara.clone();
 
             for (slot, co) in self.players.iter().enumerate() {
                 match co {
@@ -98,7 +100,7 @@ impl Lobby {
                             let mut lam = LobbyAddMember::default();
                             lam.client_id = slot as u8; // yeah, confusing, but AddMember can add multiple lobby members at once
                             lam.leader_id = self.leader_id as u8;
-                            lam.one = 1;
+                            lam.one = 0;
                             lam.lobby_num = self.lobby_num;
                             lam.block_num = self.block_num;
                             lam.event = self.event;
@@ -185,6 +187,8 @@ impl Lobby {
                 self.leader_id = self.find_first_player_not_matching(player).unwrap().0;
             }
 
+            self.players[player_client_id as usize] = None;
+
             self.bb_broadcast(handler, Some(player), BbMsg::LobbyLeave(0, LobbyLeave {
                 client_id: player_client_id,
                 leader_id: self.leader_id,
@@ -258,7 +262,7 @@ impl Lobby {
         self.bb_broadcast(handler, Some(cid), m.into())
     }
 
-    pub fn handle_bb_subcmd_62(&mut self, _handler: &mut BlockHandler, _m: BbSubCmd62) -> Result<(), LobbyError> {
+    pub fn handle_bb_subcmd_62(&mut self, _handler: &mut BlockHandler, _dest: u32, _m: BbSubCmd62) -> Result<(), LobbyError> {
         // This we do NOT propagate.
         Ok(())
     }
@@ -268,7 +272,7 @@ impl Lobby {
         self.bb_broadcast(handler, Some(cid), m.into())
     }
 
-    pub fn handle_bb_subcmd_6d(&mut self, _handler: &mut BlockHandler, _m: BbSubCmd6D) -> Result<(), LobbyError> {
+    pub fn handle_bb_subcmd_6d(&mut self, _handler: &mut BlockHandler, _dest: u32, _m: BbSubCmd6D) -> Result<(), LobbyError> {
         // This we do NOT propagate.
         Ok(())
     }

@@ -119,4 +119,3 @@ impl Serial for Bb60LevelUp {
         })
     }
 }
-

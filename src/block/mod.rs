@@ -6,7 +6,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::channel;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::thread;
@@ -45,6 +45,7 @@ pub struct BlockService {
     clients: Rc<RefCell<HashMap<usize, Rc<RefCell<ClientState>>>>>,
     lobbies: Rc<RefCell<Vec<Lobby>>>,
     parties: Rc<RefCell<Vec<Party>>>,
+    party_counter: Rc<Cell<u32>>,
     block_num: u16,
     event: u16,
     battle_params: Arc<BattleParamTables>,
@@ -78,6 +79,7 @@ impl BlockService {
                 clients: Default::default(),
                 lobbies: Default::default(),
                 parties: Default::default(),
+                party_counter: Rc::new(Cell::new(0)),
                 block_num: block_num,
                 event: event,
                 battle_params: battle_params,
@@ -102,7 +104,8 @@ impl BlockService {
             self.battle_params.clone(),
             self.online_maps.clone(),
             self.offline_maps.clone(),
-            self.level_table.clone()
+            self.level_table.clone(),
+            self.party_counter.clone()
         )
     }
 
@@ -186,9 +189,9 @@ impl BlockService {
                         Message::BbChat(_, m) => { h.bb_chat(m) },
                         Message::BbCreateGame(_, m) => { h.bb_create_game(m) },
                         Message::BbSubCmd60(_, m) => { h.bb_subcmd_60(m) },
-                        Message::BbSubCmd62(_, m) => { h.bb_subcmd_62(m) },
+                        Message::BbSubCmd62(d, m) => { h.bb_subcmd_62(d, m) },
                         Message::BbSubCmd6C(_, m) => { h.bb_subcmd_6c(m) },
-                        Message::BbSubCmd6D(_, m) => { h.bb_subcmd_6d(m) },
+                        Message::BbSubCmd6D(d, m) => { h.bb_subcmd_6d(d, m) },
                         Message::LobbyChange(_, m) => { h.bb_lobby_change(m) },
                         Message::BbGameName(_, _) => { h.bb_game_name() },
                         Message::BbGameList(_, _) => { h.bb_game_list() },
@@ -196,6 +199,7 @@ impl BlockService {
                         Message::BbUpdateOptions(_, m) => { h.bb_update_options(m) },
                         Message::BbUpdateKeys(_, m) => { h.bb_update_keys(m) },
                         Message::BbUpdateJoy(_, m) => { h.bb_update_joy(m) },
+                        Message::MenuSelect(_, m) => { h.menu_select(m) },
                         a => {
                             info!("{:?}", a);
                         }

@@ -78,13 +78,22 @@ macro_rules! impl_subcmd_enum {
                         }
                     },)*
                     c => {
-                        let mut buf = vec![0u8; (size as usize - 1) * 4];
-                        try!(read_exact(src, &mut buf));
-                        $numname::Unknown {
-                            cmd: cmd,
-                            client_id: client_id,
-                            unused: unused,
-                            data: buf
+                        if size == 0 {
+                            $numname::Unknown {
+                                cmd: cmd,
+                                client_id: client_id,
+                                unused: unused,
+                                data: Vec::new()
+                            }
+                        } else {
+                            let mut buf = vec![0u8; (size as usize - 1) * 4];
+                            try!(read_exact(src, &mut buf));
+                            $numname::Unknown {
+                                cmd: cmd,
+                                client_id: client_id,
+                                unused: unused,
+                                data: buf
+                            }
                         }
                     }
                 };

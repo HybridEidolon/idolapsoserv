@@ -28,6 +28,7 @@ pub struct Party {
     pub battle: bool,
     pub challenge: bool,
     pub single_player: bool,
+    pub unique_id: u32,
     members: [Option<usize>; 4],
     leader_id: u8,
     maps: Arc<Areas>,
@@ -36,7 +37,7 @@ pub struct Party {
 }
 
 impl Party {
-    pub fn new(name: &str, password: Option<&str>, episode: u8, difficulty: u8, battle: bool, challenge: bool, single_player: bool, event: u16, maps: Arc<Areas>) -> Party {
+    pub fn new(name: &str, password: Option<&str>, episode: u8, difficulty: u8, battle: bool, challenge: bool, single_player: bool, event: u16, maps: Arc<Areas>, unique_id: u32) -> Party {
         // pick random variants for each map based on episode
         let (variants, enemies) = match episode {
             1 => {
@@ -62,6 +63,7 @@ impl Party {
             battle: battle,
             challenge: challenge,
             single_player: single_player,
+            unique_id: unique_id,
             members: Default::default(),
             leader_id: 0,
             maps: maps,
@@ -91,31 +93,77 @@ impl Party {
     pub fn add_player(&mut self, handler: &mut BlockHandler, player: usize) -> Result<(), PartyError> {
         info!("Adding client {} to party \"{}\"", player, &self.name[2..]);
 
-        let cr = handler.get_client_state(player).unwrap();
-        let c = cr.borrow();
+        let new_client_id = match self.find_first_empty() {
+            Some(slot) => slot,
+            None => return Err(PartyError::IsFull)
+        };
+        if self.is_empty() {
+            self.leader_id = new_client_id;
+        }
+
+        // put them in that slot
+        self.members[new_client_id as usize] = Some(player);
+
+        info!("New client ID is {}", new_client_id);
 
         let mut l = BbGameJoin::default();
         l.maps = self.variants.clone();
-        l.client_id = 0;
-        l.leader_id = 0;
+        l.client_id = new_client_id;
+        l.leader_id = self.leader_id;
         l.one = 1;
         l.one2 = 1;
         l.difficulty = self.difficulty;
         l.episode = self.episode;
         l.single_player = if self.single_player {1} else {0};
-        let mut ph = PlayerHdr::default();
-        ph.tag = 0x00010000;
-        ph.guildcard = c.bb_guildcard;
-        ph.client_id = 0;
-        ph.name = c.full_char.as_ref().unwrap().name.clone();
-        l.players.push(ph);
-        let r: Message = l.into();
+        l.players.clear();
+        for (i, po) in self.members.iter().enumerate() {
+            match po {
+                &Some(cid) => {
+                    let cr = handler.get_client_state(cid).unwrap();
+                    let c = cr.borrow();
+                    let mut ph = PlayerHdr::default();
+                    ph.tag = 0x00010000;
+                    ph.guildcard = c.bb_guildcard;
+                    ph.client_id = i as u32;
+                    ph.name = c.full_char.as_ref().unwrap().chara.name.clone();
+                    l.players.push(ph);
+                },
+                _ => ()
+            }
+        }
+        debug!("{:?}", l.players);
+        let r: Message = Message::BbGameJoin(l.players.len() as u32, l);
         handler.send_to_client(player, r);
 
-        self.members[0] = Some(player);
-        self.leader_id = 0;
+        debug!("{:?}", self.members);
 
-        info!("{:?}", self.members);
+        // tell the other clients about the player
+        for (i, po) in self.members.iter().enumerate() {
+            match po {
+                &Some(cid) if cid != player => {
+                    let cr = handler.get_client_state(player).unwrap();
+                    let c = cr.borrow();
+                    let mut l = BbGameAddMember::default();
+                    let mut ph = LobbyMember::default();
+                    l.one = 0;
+                    l.leader_id = self.leader_id;
+                    l.client_id = i as u8;
+                    l.lobby_num = 0xFF;
+                    l.block_num = 1;
+                    l.event = 1;
+                    ph.hdr.tag = 0x00010000;
+                    ph.hdr.guildcard = c.bb_guildcard;
+                    ph.hdr.client_id = new_client_id as u32;
+                    ph.hdr.name = c.full_char.as_ref().unwrap().chara.name.clone();
+                    ph.inventory = c.full_char.as_ref().unwrap().inv.clone();
+                    ph.data = c.full_char.as_ref().unwrap().chara.clone();
+                    l.member = ph;
+                    let m: Message = Message::BbGameAddMember(1, l);
+                    handler.send_to_client(cid, m);
+                },
+                _ => ()
+            }
+        }
 
         Ok(())
     }
@@ -124,7 +172,7 @@ impl Party {
         let mut ret = false;
         match self.client_id_for_player(player) {
             Some(i) => {
-                info!("Removing client {} from party {}", player, self.name);
+                info!("Removing client {} from party \"{}\"", player, &self.name[2..]);
                 if self.leader_id == i {
                     // pick a new leader
                     match self.find_first_player_not_matching(player) {
@@ -199,27 +247,49 @@ impl Party {
     pub fn handle_bb_subcmd_60(&mut self, handler: &mut BlockHandler, m: BbSubCmd60) -> Result<(), PartyError> {
         // We'll eventually do more on this.
         let cid = handler.client_id;
-        match m {
+        match m.clone() {
             BbSubCmd60::Bb60ReqExp { data: r, .. } => {
                 self.handle_bb_60_req_exp(handler, r);
             },
             _ => ()
         }
+        info!("{} bc 0x60: {:?}", cid, m);
         self.bb_broadcast(handler, Some(cid), m.into())
     }
 
-    pub fn handle_bb_subcmd_62(&mut self, _handler: &mut BlockHandler, _m: BbSubCmd62) -> Result<(), PartyError> {
-        // This we do NOT propagate.
+    pub fn handle_bb_subcmd_62(&mut self, handler: &mut BlockHandler, dest: u32, m: BbSubCmd62) -> Result<(), PartyError> {
+        let cid = handler.client_id;
+        if let Some(dest_cid) = self.members[dest as usize] {
+            handler.send_to_client(dest_cid, m.clone().into());
+        } else {
+            handler.send_fatal_error(cid, "\tEInvalid message.");
+            return Ok(())
+        }
+        info!("{} bc 0x62 dest {}: {:?}", cid, dest, m);
         Ok(())
     }
 
     pub fn handle_bb_subcmd_6c(&mut self, handler: &mut BlockHandler, m: BbSubCmd6C) -> Result<(), PartyError> {
         let cid = handler.client_id;
+        match m.clone() {
+            BbSubCmd6C::Bb60ReqExp { data: r, .. } => {
+                self.handle_bb_60_req_exp(handler, r);
+            },
+            _ => ()
+        }
+        info!("{} bc 0x6c: {:?}", cid, m);
         self.bb_broadcast(handler, Some(cid), m.into())
     }
 
-    pub fn handle_bb_subcmd_6d(&mut self, _handler: &mut BlockHandler, _m: BbSubCmd6D) -> Result<(), PartyError> {
-        // This we do NOT propagate.
+    pub fn handle_bb_subcmd_6d(&mut self, handler: &mut BlockHandler, dest: u32, m: BbSubCmd6D) -> Result<(), PartyError> {
+        let cid = handler.client_id;
+        if let Some(&Some(dest_cid)) = self.members.get(dest as usize) {
+            handler.send_to_client(dest_cid, m.clone().into());
+        } else {
+            handler.send_fatal_error(cid, "\tEInvalid message.");
+            return Ok(())
+        }
+        info!("{} bc 0x6d dest {}: {:?}", cid, dest, m);
         Ok(())
     }
 
@@ -335,6 +405,30 @@ impl Party {
             match po {
                 &Some(cid) if cid != player => {
                     return Some((i as u8, cid))
+                },
+                _ => continue
+            }
+        }
+        None
+    }
+
+    // fn find_first_player(&self) -> Option<(u8, usize)> {
+    //     for (i, po) in self.members.iter().enumerate() {
+    //         match po {
+    //             &Some(cid) => {
+    //                 return Some((i as u8, cid))
+    //             },
+    //             _ => continue
+    //         }
+    //     }
+    //     None
+    // }
+
+    fn find_first_empty(&self) -> Option<u8> {
+        for (i, po) in self.members.iter().enumerate() {
+            match po {
+                &None => {
+                    return Some(i as u8)
                 },
                 _ => continue
             }

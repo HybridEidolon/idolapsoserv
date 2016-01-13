@@ -234,8 +234,12 @@ impl ClientHandler for ShipGateClient {
 
     fn send_msg<H: Handler>(&mut self, event_loop: &mut EventLoop<H>, msg: Message) -> io::Result<()> {
         self.send_queue.push_back(msg);
-        self.interests.insert(EventSet::writable());
-        self.reregister(event_loop)
+        if self.send_queue.len() == 1 {
+            self.interests.insert(EventSet::writable());
+            self.reregister(event_loop)
+        } else {
+            Ok(())
+        }
     }
 
     fn drop_client<H: Handler>(&mut self, event_loop: &mut EventLoop<H>) -> io::Result<()> {
