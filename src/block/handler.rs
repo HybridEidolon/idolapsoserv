@@ -9,6 +9,7 @@ use mio::Sender;
 use psomsg::bb::*;
 
 use psodata::battleparam::BattleParamTables;
+use psodata::leveltable::LevelTable;
 
 //use ::game::CharClass;
 use ::shipgate::client::callbacks::SgCbMgr;
@@ -33,7 +34,8 @@ pub struct BlockHandler {
     parties: Rc<RefCell<Vec<Party>>>,
     pub battle_params: Arc<BattleParamTables>,
     online_maps: Arc<Areas>,
-    offline_maps: Arc<Areas>
+    offline_maps: Arc<Areas>,
+    pub level_table: Arc<LevelTable>
 }
 
 impl BlockHandler {
@@ -45,7 +47,8 @@ impl BlockHandler {
                parties: Rc<RefCell<Vec<Party>>>,
                battle_params: Arc<BattleParamTables>,
                online_maps: Arc<Areas>,
-               offline_maps: Arc<Areas>) -> BlockHandler {
+               offline_maps: Arc<Areas>,
+               level_table: Arc<LevelTable>) -> BlockHandler {
         BlockHandler {
             sender: sender,
             sg_sender: sg_sender,
@@ -55,7 +58,8 @@ impl BlockHandler {
             parties: parties,
             battle_params: battle_params,
             online_maps: online_maps,
-            offline_maps: offline_maps
+            offline_maps: offline_maps,
+            level_table: level_table
         }
     }
 

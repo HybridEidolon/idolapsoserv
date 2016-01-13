@@ -35,6 +35,8 @@ pub mod services;
 pub mod config;
 pub mod maps;
 
+use std::io::Cursor;
+
 use ::args::USAGE_STRING;
 use ::args::Args;
 
@@ -43,6 +45,10 @@ use docopt::Docopt;
 use mio::EventLoop;
 
 use psodata::battleparam::BattleParamTables;
+use psodata::leveltable::LevelTable;
+use psodata::prs::decompress_prs;
+
+use psoserial::Serial;
 
 use ::loop_handler::LoopHandler;
 use ::patch::PatchService;
@@ -111,6 +117,25 @@ fn main() {
     let offline_maps = Arc::new(Areas::load_from_files_offline(&format!("{}/maps", config.data_path)).expect("Unable to load Blue Burst offline map files"));
     info!("Loaded BB offline mode map files for enemy data from path: {}/maps", config.data_path);
 
+    // Load PlyLevelTbl.prs
+    let level_table;
+    {
+        let mut f = File::open(format!("{}/param/PlyLevelTbl.prs", config.data_path)).expect("Unable to open PlyLevelTbl.prs");
+        let mut decomp_cursor = Cursor::new(decompress_prs(&mut f).expect("Unable to decompress PlyLevelTbl.prs"));
+        level_table = Arc::new(LevelTable::deserialize(&mut decomp_cursor).expect("Unable to parse decompressed PlyLevelTbl.prs"));
+    }
+
+    {
+        println!("Starting stats:");
+        for t in level_table.start_stats.iter() {
+            println!("{:?}", t);
+        }
+        println!("Level stats (class 0)");
+        for t in level_table.levels[0].iter() {
+            println!("{:?}", t);
+        }
+    }
+
     let mut event_loop = EventLoop::new().expect("Could not create event loop");
     info!("Socket event loop created.");
 
@@ -134,7 +159,12 @@ fn main() {
         match s {
             &ServiceConf::Patch { ref bind, ref v4_servers, ref motd, random_balance } => {
                 info!("Patch service at {:?}", bind);
-                services.push(PatchService::spawn(bind, event_loop.channel(), v4_servers.clone(), motd.clone(), random_balance));
+                services.push(PatchService::spawn(
+                    bind,
+                    event_loop.channel(),
+                    v4_servers.clone(),
+                    motd.clone(),
+                    random_balance));
             },
             &ServiceConf::Data { ref bind, .. } => {
                 info!("Data service at {:?}", bind);
@@ -144,18 +174,39 @@ fn main() {
                 info!("Login service at {:?}", bind);
                 match version {
                     Version::BlueBurst => {
-                        services.push(BbLoginService::spawn(bind, addr, event_loop.channel(), bb_keytable.clone(), &sg_sender, param_files.clone()))
+                        services.push(BbLoginService::spawn(
+                            bind,
+                            addr,
+                            event_loop.channel(),
+                            bb_keytable.clone(),
+                            &sg_sender,
+                            param_files.clone()))
                     },
                     _ => unimplemented!()
                 }
             },
             &ServiceConf::Ship { ref bind, ref name, ref blocks, .. } => {
                 info!("Ship service at {:?}", bind);
-                services.push(ShipService::spawn(bind, event_loop.channel(), bb_keytable.clone(), &sg_sender, name, blocks.clone()));
+                services.push(ShipService::spawn(bind,
+                    event_loop.channel(),
+                    bb_keytable.clone(),
+                    &sg_sender,
+                    name,
+                    blocks.clone()));
             },
             &ServiceConf::Block { ref bind, num, event, .. } => {
                 info!("Block service at {:?}", bind);
-                services.push(BlockService::spawn(bind, event_loop.channel(), &sg_sender, bb_keytable.clone(), num, event, battle_params.clone(), online_maps.clone(), offline_maps.clone()));
+                services.push(BlockService::spawn(
+                    bind,
+                    event_loop.channel(),
+                    &sg_sender,
+                    bb_keytable.clone(),
+                    num,
+                    event,
+                    battle_params.clone(),
+                    online_maps.clone(),
+                    offline_maps.clone(),
+                    level_table.clone()));
             },
             &ServiceConf::ShipGate { .. } => {
                 match sg {

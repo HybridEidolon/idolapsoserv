@@ -227,7 +227,6 @@ impl Party {
         let cid = handler.client_id;
         debug!("Client {} request exp: {:?}", cid, m);
         if let Some(ref enemy) = self.enemies.get(m.enemy_id as usize) {
-            // TODO handle levelups with player level table
             let bp = {
                 match self.episode {
                     1 => handler.battle_params.get_ep1(enemy.param_entry, self.single_player).cloned(),
@@ -263,13 +262,72 @@ impl Party {
     }
 
     fn award_exp(&self, client: usize, handler: &mut BlockHandler, exp: u32) {
-        // TODO check for levelup using level table
+        let mut leveled_up = false;
+        let mut current_level;
+        let mut stats = Default::default();
         {
             let cr = handler.get_client_state(client).unwrap();
-            let ref mut client = cr.borrow_mut();
-            client.full_char.as_mut().unwrap().chara.exp += exp;
+            let ref mut client_state = cr.borrow_mut();
+            let lt = handler.level_table.clone();
+            let mut chara = client_state.full_char.as_mut().unwrap();
+            current_level = chara.chara.level as usize;
+            let current_exp = chara.chara.exp as usize;
+
+            if current_level >= 199 {
+                // Can't gain any more experience.
+                return
+            }
+
+
+            loop {
+                if current_level >= 199 {
+                    // We hit 200 while adding levels, break
+                    break
+                }
+                // Level table entry.
+                let lte = lt.levels[chara.chara.class as usize][current_level + 1];
+                debug!("Exp needed to level: {}, current: {}", lte.exp, current_exp);
+                if current_exp + exp as usize >= lte.exp as usize {
+                    info!("Client {} leveled up!", client);
+                    leveled_up = true;
+
+                    // Update their stats with award from new level.
+                    chara.chara.stats.atp += lte.atp as u16;
+                    chara.chara.stats.mst += lte.mst as u16;
+                    chara.chara.stats.evp += lte.evp as u16;
+                    chara.chara.stats.hp += lte.hp as u16;
+                    chara.chara.stats.dfp += lte.dfp as u16;
+                    chara.chara.stats.ata += lte.ata as u16;
+
+                    // TODO add equipped mag bonuses
+
+                    // Update their level.
+                    current_level += 1;
+
+                    stats = chara.chara.stats;
+                } else {
+                    break
+                }
+            }
+
+            chara.chara.exp += exp;
+            chara.chara.level = current_level as u32;
         }
-        handler.send_to_client(client, Message::BbSubCmd60(0, BbSubCmd60::Bb60GiveExp { client_id: 0, unused: 0, data: Bb60GiveExp(exp) }))
+        let slot = self.client_id_for_player(client).unwrap();
+
+        self.bb_broadcast(handler, None, Message::BbSubCmd60(0, BbSubCmd60::Bb60GiveExp { client_id: slot, unused: 0, data: Bb60GiveExp(exp) })).unwrap();
+
+        if leveled_up {
+            self.bb_broadcast(handler, None, Message::BbSubCmd60(0, BbSubCmd60::Bb60LevelUp { client_id: slot, unused: 0, data: Bb60LevelUp {
+                atp: stats.atp,
+                mst: stats.mst,
+                evp: stats.evp,
+                hp: stats.hp,
+                dfp: stats.dfp,
+                ata: stats.ata,
+                level: current_level as u32
+            }})).unwrap();
+        }
     }
 
     fn find_first_player_not_matching(&self, player: usize) -> Option<(u8, usize)> {

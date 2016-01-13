@@ -55,9 +55,9 @@ impl Serial for LevelEntry {
 
 #[derive(Clone, Debug, Default)]
 pub struct LevelTable {
-    start_stats: Vec<LevelEntry>,
+    pub start_stats: Vec<LevelEntry>,
     unk: Vec<u8>,
-    levels: Vec<Vec<LevelEntry>>
+    pub levels: Vec<Vec<LevelEntry>>
 }
 impl Serial for LevelTable {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {

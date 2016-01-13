@@ -19,6 +19,7 @@ use rand::random;
 use psomsg::bb::*;
 
 use psodata::battleparam::BattleParamTables;
+use psodata::leveltable::LevelTable;
 
 use ::shipgate::client::SgSender;
 use ::services::message::NetMsg;
@@ -48,7 +49,8 @@ pub struct BlockService {
     event: u16,
     battle_params: Arc<BattleParamTables>,
     online_maps: Arc<Areas>,
-    offline_maps: Arc<Areas>
+    offline_maps: Arc<Areas>,
+    level_table: Arc<LevelTable>
 }
 
 impl BlockService {
@@ -60,7 +62,8 @@ impl BlockService {
                  event: u16,
                  battle_params: Arc<BattleParamTables>,
                  online_maps: Arc<Areas>,
-                 offline_maps: Arc<Areas>) -> Service {
+                 offline_maps: Arc<Areas>,
+                 level_table: Arc<LevelTable>) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -79,7 +82,8 @@ impl BlockService {
                 event: event,
                 battle_params: battle_params,
                 online_maps: online_maps,
-                offline_maps: offline_maps
+                offline_maps: offline_maps,
+                level_table: level_table
             };
             d.run();
         });
@@ -97,7 +101,8 @@ impl BlockService {
             self.parties.clone(),
             self.battle_params.clone(),
             self.online_maps.clone(),
-            self.offline_maps.clone()
+            self.offline_maps.clone(),
+            self.level_table.clone()
         )
     }
 
