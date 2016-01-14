@@ -176,14 +176,15 @@ fn main() {
                     _ => unimplemented!()
                 }
             },
-            &ServiceConf::Ship { ref bind, ref name, ref blocks, .. } => {
+            &ServiceConf::Ship { ref bind, ref name, ref blocks, my_ipv4, .. } => {
                 info!("Ship service at {:?}", bind);
                 services.push(ShipService::spawn(bind,
                     event_loop.channel(),
                     bb_keytable.clone(),
                     &sg_sender,
                     name,
-                    blocks.clone()));
+                    blocks.clone(),
+                    my_ipv4));
             },
             &ServiceConf::Block { ref bind, num, event, .. } => {
                 info!("Block service at {:?}", bind);

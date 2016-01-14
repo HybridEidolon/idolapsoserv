@@ -233,7 +233,6 @@ impl BlockHandler {
                             fc.chara.stats.ata = 3000;
                             fc.chara.stats.mst = 3000;
                             fc.chara.stats.lck = 3000;
-                            fc.chara.level = 99;
                             fc.section = 3;
                             fc.class = 3;
                             fc.chara.section = 3;
@@ -311,7 +310,7 @@ impl BlockHandler {
             let ref mut lobbies = lr.borrow_mut();
             for l in lobbies.iter_mut() {
                 if l.has_player(self.client_id) {
-                    info!("<{}:{}> {}: {}", l.block_num(), l.lobby_num() + 1, player_name, m.1);
+                    info!("<{:02}-{:02}> {}: {}", l.block_num(), l.lobby_num() + 1, &player_name[2..], &m.1[2..]);
                     m.0 = gc_num;
                     l.bb_broadcast(self, None, m.into()).unwrap();
                     return

@@ -36,6 +36,7 @@ pub enum ServiceConf {
     Ship {
         bind: SocketAddr,
         name: String,
+        my_ipv4: SocketAddrV4,
         blocks: Vec<BlockConf>
     },
     Block {
@@ -217,10 +218,19 @@ impl ServiceConf {
                             },
                             None => return Err("No blocks defined for ship".to_string())
                         };
+                        let my_ipv4 = match t.get("my_ipv4")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.parse())
+                        {
+                            Some(Ok(ip)) => ip,
+                            Some(Err(_)) => return Err(format!("Invalid IPv4 bind address for ship {}", name)),
+                            None => return Err(format!("No IPv4 bind address for ship {}", name))
+                        };
 
                         Ok(ServiceConf::Ship {
                             bind: bind,
                             name: name,
+                            my_ipv4: my_ipv4,
                             blocks: blocks
                         })
                     },

@@ -6,7 +6,7 @@ use ::loop_handler::LoopMsg;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::thread;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, SocketAddrV4};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -40,7 +40,8 @@ pub struct ShipService {
     sg_sender: SgCbMgr<ShipHandler>,
     clients: Rc<RefCell<HashMap<usize, ClientState>>>,
     name: String,
-    blocks: Rc<Vec<BlockConf>>
+    blocks: Rc<Vec<BlockConf>>,
+    my_ipv4: SocketAddrV4
 }
 
 impl ShipService {
@@ -49,7 +50,8 @@ impl ShipService {
                  key_table: Arc<Vec<u32>>,
                  sg_sender: &SgSender,
                  name: &str,
-                 blocks: Vec<BlockConf>) -> Service {
+                 blocks: Vec<BlockConf>,
+                 my_ipv4: SocketAddrV4) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -65,7 +67,8 @@ impl ShipService {
                 sg_sender: sg_sender.into(),
                 clients: Default::default(),
                 name: name,
-                blocks: Rc::new(blocks)
+                blocks: Rc::new(blocks),
+                my_ipv4: my_ipv4
             };
             d.run();
         });
@@ -88,7 +91,7 @@ impl ShipService {
     pub fn run(mut self) {
         info!("Ship service running.");
 
-        self.sg_sender.send(RegisterShip("127.0.0.1:13000".parse().unwrap(), self.name.clone())).unwrap();
+        self.sg_sender.send(RegisterShip(self.my_ipv4, self.name.clone())).unwrap();
 
         loop {
             let msg = match self.receiver.recv() {

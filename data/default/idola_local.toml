@@ -82,48 +82,18 @@ addr = "127.0.0.1:12000"
 [[service]]
 bind = "127.0.0.1:13000"
 type = "ship"
+# This should usually be set to the same as the bind address. Whatever it is,
+# clients in the network you want to access the ship need to be able to route
+# to it. If bind is 127.0.0.1, you have to use 127.0.0.1. If it's a LAN IP, use
+# the LAN IP. If it's 0.0.0.0, use your external Internet IP. This is sent to
+# the shipgate on ship registration.
+my_ipv4 = "127.0.0.1:13000"
 name = "IDOLA"
   [[service.block]]
   # The name shown in the block list. It should probably correspond to the
   # index in this array.
   name = "BLOCK01"
   addr = "127.0.0.1:13001"
-
-  [[service.block]]
-  name = "BLOCK02"
-  addr = "127.0.0.1:13002"
-
-  [[service.block]]
-  name = "BLOCK03"
-  addr = "127.0.0.1:13003"
-
-  [[service.block]]
-  name = "BLOCK04"
-  addr = "127.0.0.1:13004"
-
-  [[service.block]]
-  name = "BLOCK05"
-  addr = "127.0.0.1:13005"
-
-  [[service.block]]
-  name = "BLOCK06"
-  addr = "127.0.0.1:13006"
-
-  [[service.block]]
-  name = "BLOCK07"
-  addr = "127.0.0.1:13007"
-
-  [[service.block]]
-  name = "BLOCK08"
-  addr = "127.0.0.1:13008"
-
-  [[service.block]]
-  name = "BLOCK09"
-  addr = "127.0.0.1:13009"
-
-  [[service.block]]
-  name = "BLOCK10"
-  addr = "127.0.0.1:13010"
 
 ## Block ##
 # Ships normally have 10 distinct "blocks" on which most gameplay actually
@@ -138,61 +108,7 @@ type = "block"
 num = 1
 # The seasonal event for this block. Invalid events may cause a client crash.
 # A full list of events can be found elsewhere.
-event = 12
-
-[[service]]
-bind = "127.0.0.1:13002"
-type = "block"
-num = 2
-event = 12
-
-[[service]]
-bind = "127.0.0.1:13003"
-type = "block"
-num = 3
-event = 12
-
-[[service]]
-bind = "127.0.0.1:13004"
-type = "block"
-num = 4
-event = 12
-
-[[service]]
-bind = "127.0.0.1:13005"
-type = "block"
-num = 5
-event = 12
-
-[[service]]
-bind = "127.0.0.1:13006"
-type = "block"
-num = 6
-event = 12
-
-[[service]]
-bind = "127.0.0.1:13007"
-type = "block"
-num = 7
-event = 12
-
-[[service]]
-bind = "127.0.0.1:13008"
-type = "block"
-num = 8
-event = 12
-
-[[service]]
-bind = "127.0.0.1:13009"
-type = "block"
-num = 9
-event = 12
-
-[[service]]
-bind = "127.0.0.1:13010"
-type = "block"
-num = 10
-event = 12
+event = 0
 
 ## Shipgate ##
 # The shipgate is a special service. Rather than clients connecting to it, the

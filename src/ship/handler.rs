@@ -121,7 +121,7 @@ impl ShipHandler {
                                 menu_id: 0x00040000,
                                 item_id: i,
                                 flags: 0x0000,
-                                name: b.name.clone()
+                                name: format!("{:02}:{}", i, b.name)
                             });
                             i += 1;
                         }

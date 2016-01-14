@@ -8,7 +8,7 @@ use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::thread;
 use std::net::{SocketAddr, SocketAddrV4};
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::sync::Arc;
 
 use mio::tcp::TcpListener;
@@ -34,7 +34,7 @@ pub struct ShipGateService {
     password: String,
     clients: HashMap<usize, ClientCtx>,
     pool: Arc<Pool>,
-    ships: HashMap<usize, (SocketAddrV4, String)>
+    ships: BTreeMap<usize, (SocketAddrV4, String)>
 }
 
 
@@ -112,7 +112,9 @@ impl ShipGateService {
                                 Some((req, RegisterShipAck.into()))
                             },
                             Message::ShipList(req, _) => {
-                                let ships: Vec<_> = self.ships.values().map(|v| v.clone()).collect();
+                                let ships: Vec<_> = self.ships.values().enumerate().map(|v| {
+                                    ((v.1).0, format!("{:02}:{}", v.0 + 1, (v.1).1))
+                                }).collect();
                                 Some((req, ShipListAck(ships).into()))
                             },
                             Message::BbUpdateOptions(_, body) => {
