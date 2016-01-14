@@ -310,7 +310,7 @@ impl BlockHandler {
             let ref mut lobbies = lr.borrow_mut();
             for l in lobbies.iter_mut() {
                 if l.has_player(self.client_id) {
-                    info!("<{:02}-{:02}> {}: {}", l.block_num(), l.lobby_num() + 1, &player_name[2..], &m.1[2..]);
+                    info!("<{:02}-{:02}> {}: {}", l.block_num(), l.lobby_num() + 1, player_name.trim_left_matches("\tE"), m.1.trim_left_matches("\tE"));
                     m.0 = gc_num;
                     l.bb_broadcast(self, None, m.into()).unwrap();
                     return
@@ -323,9 +323,10 @@ impl BlockHandler {
             let ref mut parties = pr.borrow_mut();
             for p in parties.iter_mut() {
                 if p.has_player(self.client_id) {
-                    info!("<{}> {}: {}", &p.name[2..], player_name, m.1);
+                    let cid = self.client_id;
+                    info!("<{}> {}: {}", &p.name[2..], player_name.trim_left_matches("\tE"), m.1.trim_left_matches("\tE"));
                     m.0 = gc_num;
-                    p.bb_broadcast(self, None, m.into()).unwrap();
+                    p.handle_chat(self, cid, &m.1).unwrap();
                     return
                 }
             }

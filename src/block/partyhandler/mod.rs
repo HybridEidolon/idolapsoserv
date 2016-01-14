@@ -20,6 +20,11 @@ use super::handler::BlockHandler;
 use self::error::PartyError;
 use self::enemygen::convert_enemy;
 
+static SLASH_COMMAND_HELP_MSG: &'static str = "\tC6Slash commands\tC7
+/help -- Show this message
+/giveexp <exp> -- Give yourself <exp>
+";
+
 #[derive(Clone, Debug)]
 pub struct Party {
     pub name: String,
@@ -343,6 +348,43 @@ impl Party {
             unreachable!()
         }
         Ok(())
+    }
+
+    pub fn handle_chat(&mut self, handler: &mut BlockHandler, sender: usize, msg: &str) -> Result<(), PartyError> {
+        // since these will always come with \tE prepended...
+        let tmsg = msg.trim_left_matches("\tE");
+        // check for slash command
+        if tmsg.starts_with("/") {
+            let mut s_w = tmsg.split_whitespace();
+            if let Some(w) = s_w.next() {
+                match w {
+                    "/help" => {
+                        let reply = Message::LargeMsg(0, LargeMsg(SLASH_COMMAND_HELP_MSG.to_string()));
+                        handler.send_to_client(sender, reply);
+                        return Ok(())
+                    },
+                    "/giveexp" => {
+                        if let Some(exp) = s_w.next().and_then(|ww| ww.parse().ok()) {
+                            info!("Client {} awarded themselves {} exp", sender, exp);
+                            self.award_exp(sender, handler, exp);
+                            return Ok(())
+                        } else {
+                            handler.send_error(sender, "\tEInvalid arguments.\nTry using /help.");
+                            return Ok(())
+                        }
+                    },
+                    a => {
+                        handler.send_error(sender, &format!("\tEUnknown slash command\n{}\nTry using /help.", a));
+                        return Ok(())
+                    }
+                }
+            }
+        }
+
+        // broadcast chat
+        let cr = handler.get_client_state(sender).unwrap();
+        let ref client_state = cr.borrow();
+        self.bb_broadcast(handler, None, Message::BbChat(0, BbChat(client_state.bb_guildcard, msg.to_string())))
     }
 
     pub fn handle_bb_subcmd_60(&mut self, handler: &mut BlockHandler, sender: usize, m: BbSubCmd60) -> Result<(), PartyError> {
