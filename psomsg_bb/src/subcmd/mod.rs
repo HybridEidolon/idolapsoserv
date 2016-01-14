@@ -119,3 +119,28 @@ impl Serial for Bb60LevelUp {
         })
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct Bb60DoneBurst {
+    pub data: Vec<u8>
+}
+impl Serial for Bb60DoneBurst {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(write_array(&self.data, 12, dst));
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let data = try!(read_array(12, src));
+        Ok(Bb60DoneBurst {
+            data: data
+        })
+    }
+}
+impl Default for Bb60DoneBurst {
+    fn default() -> Bb60DoneBurst {
+        Bb60DoneBurst {
+            data: vec![0; 12]
+        }
+    }
+}

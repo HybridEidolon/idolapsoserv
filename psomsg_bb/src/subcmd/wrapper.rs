@@ -68,6 +68,7 @@ macro_rules! impl_subcmd_enum {
                 let size: u8 = try!(Serial::deserialize(src));
                 let client_id: u8 = try!(Serial::deserialize(src));
                 let unused: u8 = try!(Serial::deserialize(src));
+                debug!("{} header: cmd=0x{:x}, size=0x{:x}, client_id=0x{:x}, unused=0x{:x}", stringify!($numname), cmd, size, client_id, unused);
                 let ret = match cmd {
                     $($id => {
                         let data = try!($name::deserialize(src));
@@ -103,8 +104,101 @@ macro_rules! impl_subcmd_enum {
     }
 }
 
+macro_rules! impl_subcmd_6d_enum {
+    ($numname:ident = $($id:expr => $name:ident),*) => {
+        #[derive(Clone, Debug)]
+        pub enum $numname {
+            Unknown {
+                cmd: u8,
+                flags: u8,
+                unused: u16,
+                data: Vec<u8>
+            },
+            $($name {
+                flags: u8,
+                unused: u16,
+                data: $name
+            }),*
+        }
+
+        impl Serial for $numname {
+            fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+                let w_cmd: u8;
+                let w_flags: u8;
+                let w_unused: u16;
+                let w_size: u32;
+                let w_data;
+                match self {
+                    &$numname::Unknown { cmd, flags, unused, ref data } => {
+                        w_cmd = cmd;
+                        w_flags = flags;
+                        w_unused = unused;
+                        w_data = data.clone();
+                        w_size = (w_data.len() + 8) as u32;
+                    },
+                    $(&$numname::$name { flags, unused, ref data } => {
+                        w_cmd = $id;
+                        w_flags = flags;
+                        w_unused = unused;
+                        let mut cursor = Cursor::new(Vec::new());
+                        try!(data.serialize(&mut cursor));
+                        w_data = cursor.into_inner();
+                        w_size = (w_data.len() + 8) as u32;
+                    }),*
+                }
+
+                try!(w_cmd.serialize(dst));
+                try!(w_flags.serialize(dst));
+                try!(w_unused.serialize(dst));
+                try!(w_size.serialize(dst));
+                try!(dst.write_all(&w_data));
+                Ok(())
+            }
+
+            fn deserialize(src: &mut Read) -> io::Result<$numname> {
+                let cmd: u8 = try!(Serial::deserialize(src));
+                let flags: u8 = try!(Serial::deserialize(src));
+                let unused: u16 = try!(Serial::deserialize(src));
+                let size: u32 = try!(Serial::deserialize(src));
+                debug!("{} header: cmd=0x{:x}, flags=0x{:x}, unused=0x{:x}, size=0x{:x}", stringify!($numname), cmd, flags, unused, size);
+                let ret = match cmd {
+                    $($id => {
+                        let data = try!($name::deserialize(src));
+                        $numname::$name {
+                            flags: flags,
+                            unused: unused,
+                            data: data
+                        }
+                    },)*
+                    c => {
+                        if size == 0 {
+                            $numname::Unknown {
+                                cmd: cmd,
+                                flags: flags,
+                                unused: unused,
+                                data: Vec::new()
+                            }
+                        } else {
+                            let mut buf = vec![0u8; size as usize - 8];
+                            try!(read_exact(src, &mut buf));
+                            $numname::Unknown {
+                                cmd: cmd,
+                                flags: flags,
+                                unused: unused,
+                                data: buf
+                            }
+                        }
+                    }
+                };
+                Ok(ret)
+            }
+        }
+    }
+}
+
 impl_subcmd_enum! { BbSubCmd60 =
     0x30 => Bb60LevelUp,
+    0x72 => Bb60DoneBurst,
     0x6F => QuestData1,
     0xBF => Bb60GiveExp,
     0xC8 => Bb60ReqExp
@@ -112,6 +206,7 @@ impl_subcmd_enum! { BbSubCmd60 =
 
 impl_subcmd_enum! { BbSubCmd6C =
     0x30 => Bb60LevelUp,
+    0x72 => Bb60DoneBurst,
     0x6F => QuestData1,
     0xBF => Bb60GiveExp,
     0xC8 => Bb60ReqExp
@@ -121,6 +216,5 @@ impl_subcmd_enum! { BbSubCmd62 =
     0x60 => Bb62ItemReq
 }
 
-impl_subcmd_enum! { BbSubCmd6D =
-    0x60 => Bb62ItemReq
+impl_subcmd_6d_enum! { BbSubCmd6D =
 }

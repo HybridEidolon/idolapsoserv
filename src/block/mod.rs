@@ -200,6 +200,7 @@ impl BlockService {
                         Message::BbUpdateKeys(_, m) => { h.bb_update_keys(m) },
                         Message::BbUpdateJoy(_, m) => { h.bb_update_joy(m) },
                         Message::MenuSelect(_, m) => { h.menu_select(m) },
+                        Message::DoneBursting(_, _) => { h.done_burst() },
                         a => {
                             info!("{:?}", a);
                         }

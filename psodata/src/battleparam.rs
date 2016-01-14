@@ -38,51 +38,51 @@ impl BattleParamTables {
         })
     }
 
-    pub fn get_ep1(&self, idx: usize, one_player: bool) -> Option<&BattleParam> {
+    pub fn get_ep1(&self, idx: usize, one_player: bool, difficulty: u8) -> Option<&BattleParam> {
         if one_player {
-            self.ep1_1p.get(idx)
+            self.ep1_1p.get(idx + 0x60 * (difficulty as usize))
         } else {
-            self.ep1.get(idx)
+            self.ep1.get(idx + 0x60 * (difficulty as usize))
         }
     }
 
-    pub fn get_ep1_mut(&mut self, idx: usize, one_player: bool) -> Option<&mut BattleParam> {
+    pub fn get_ep1_mut(&mut self, idx: usize, one_player: bool, difficulty: u8) -> Option<&mut BattleParam> {
         if one_player {
-            self.ep1_1p.get_mut(idx)
+            self.ep1_1p.get_mut(idx + 0x60 * (difficulty as usize))
         } else {
-            self.ep1.get_mut(idx)
+            self.ep1.get_mut(idx + 0x60 * (difficulty as usize))
         }
     }
 
-    pub fn get_ep2(&self, idx: usize, one_player: bool) -> Option<&BattleParam> {
+    pub fn get_ep2(&self, idx: usize, one_player: bool, difficulty: u8) -> Option<&BattleParam> {
         if one_player {
-            self.ep2_1p.get(idx)
+            self.ep2_1p.get(idx + 0x60 * (difficulty as usize))
         } else {
-            self.ep2.get(idx)
+            self.ep2.get(idx + 0x60 * (difficulty as usize))
         }
     }
 
-    pub fn get_ep2_mut(&mut self, idx: usize, one_player: bool) -> Option<&mut BattleParam> {
+    pub fn get_ep2_mut(&mut self, idx: usize, one_player: bool, difficulty: u8) -> Option<&mut BattleParam> {
         if one_player {
-            self.ep2_1p.get_mut(idx)
+            self.ep2_1p.get_mut(idx + 0x60 * (difficulty as usize))
         } else {
-            self.ep2.get_mut(idx)
+            self.ep2.get_mut(idx + 0x60 * (difficulty as usize))
         }
     }
 
-    pub fn get_ep4(&self, idx: usize, one_player: bool) -> Option<&BattleParam> {
+    pub fn get_ep4(&self, idx: usize, one_player: bool, difficulty: u8) -> Option<&BattleParam> {
         if one_player {
-            self.ep4_1p.get(idx)
+            self.ep4_1p.get(idx + 0x60 * (difficulty as usize))
         } else {
-            self.ep4.get(idx)
+            self.ep4.get(idx + 0x60 * (difficulty as usize))
         }
     }
 
-    pub fn get_ep4_mut(&mut self, idx: usize, one_player: bool) -> Option<&mut BattleParam> {
+    pub fn get_ep4_mut(&mut self, idx: usize, one_player: bool, difficulty: u8) -> Option<&mut BattleParam> {
         if one_player {
-            self.ep4_1p.get_mut(idx)
+            self.ep4_1p.get_mut(idx + 0x60 * (difficulty as usize))
         } else {
-            self.ep4.get_mut(idx)
+            self.ep4.get_mut(idx + 0x60 * (difficulty as usize))
         }
     }
 }

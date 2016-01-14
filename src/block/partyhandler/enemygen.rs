@@ -124,8 +124,6 @@ pub fn convert_enemy(me: &MapEnemy, episode: u8, event: u16, alt_enemies: bool) 
                 debug!("Poison/Nar Lily");
                 let acc = if me.reserved2[10] & 0x800000 > 0 {1} else {0};
                 let name = if acc == 1 { "Nar Lily" } else { "Poison Lily" };
-                info!("lily reserved2: {:?}", me.reserved2);
-                info!("lily reserved2[10]: {}", me.reserved2[10]);
                 ret.push(InstanceEnemy {
                     param_entry: 0x04 + acc,
                     rt_entry: 0x0D + acc,

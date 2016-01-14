@@ -218,8 +218,8 @@ impl BlockHandler {
                             fc.inv.items[5].data.data[1] = 0x03;
                             fc.inv.items[5].data.data[5] = 10; // stack
 
-                            fc.name = "Rico".to_string();
-                            fc.chara.name = "Rico".to_string();
+                            fc.name = "\tERico".to_string();
+                            fc.chara.name = "\tERico".to_string();
                             fc.guildcard = a.guildcard_num;
                             fc.chara.guildcard = format!("  {}", a.guildcard_num);
                             fc.option_flags = a.options;
@@ -233,6 +233,7 @@ impl BlockHandler {
                             fc.chara.stats.ata = 3000;
                             fc.chara.stats.mst = 3000;
                             fc.chara.stats.lck = 3000;
+                            fc.chara.level = 99;
                             fc.section = 3;
                             fc.class = 3;
                             fc.chara.section = 3;
@@ -313,6 +314,19 @@ impl BlockHandler {
                     info!("<{}:{}> {}: {}", l.block_num(), l.lobby_num() + 1, player_name, m.1);
                     m.0 = gc_num;
                     l.bb_broadcast(self, None, m.into()).unwrap();
+                    return
+                }
+            }
+        }
+        // Then, check if they're in a party
+        {
+            let pr = self.parties.clone();
+            let ref mut parties = pr.borrow_mut();
+            for p in parties.iter_mut() {
+                if p.has_player(self.client_id) {
+                    info!("<{}> {}: {}", &p.name[2..], player_name, m.1);
+                    m.0 = gc_num;
+                    p.bb_broadcast(self, None, m.into()).unwrap();
                     return
                 }
             }
@@ -401,7 +415,7 @@ impl BlockHandler {
             for p in parties.iter_mut() {
                 let cid = self.client_id;
                 if p.has_player(cid) {
-                    p.handle_bb_subcmd_60(self, m).unwrap();
+                    p.handle_bb_subcmd_60(self, cid, m).unwrap();
                     return
                 }
             }
@@ -429,7 +443,7 @@ impl BlockHandler {
             for p in parties.iter_mut() {
                 let cid = self.client_id;
                 if p.has_player(cid) {
-                    p.handle_bb_subcmd_62(self, dest, m).unwrap();
+                    p.handle_bb_subcmd_62(self, cid, dest, m).unwrap();
                     return
                 }
             }
@@ -457,7 +471,7 @@ impl BlockHandler {
             for p in parties.iter_mut() {
                 let cid = self.client_id;
                 if p.has_player(cid) {
-                    p.handle_bb_subcmd_6c(self, m).unwrap();
+                    p.handle_bb_subcmd_6c(self, cid, m).unwrap();
                     return
                 }
             }
@@ -485,7 +499,7 @@ impl BlockHandler {
             for p in parties.iter_mut() {
                 let cid = self.client_id;
                 if p.has_player(cid) {
-                    p.handle_bb_subcmd_6d(self, dest, m).unwrap();
+                    p.handle_bb_subcmd_6d(self, cid, dest, m).unwrap();
                     return
                 }
             }
@@ -652,7 +666,18 @@ impl BlockHandler {
                     if p.unique_id == item_id {
                         let cid = self.client_id;
                         // First, verify they can join the game
-                        // TODO verify
+                        if p.is_bursting() {
+                            self.send_error(self.client_id, "\tEA player is bursting.\nPlease wait.");
+                            return
+                        }
+                        if p.player_limit() == 1 {
+                            self.send_error(self.client_id, "\tEParty is One Person only.");
+                            return
+                        }
+                        if p.is_full() {
+                            self.send_error(self.client_id, "\tEParty is full.");
+                            return
+                        }
 
                         // Then, remove them from their lobby
                         let lr = self.lobbies.clone();
@@ -681,6 +706,17 @@ impl BlockHandler {
             _ => {
                 self.send_error(self.client_id, "\tEInvalid menu");
                 return
+            }
+        }
+    }
+
+    pub fn done_burst(&mut self) {
+        let pr = self.parties.clone();
+        let mut parties = pr.borrow_mut();
+        for p in parties.iter_mut() {
+            if p.has_player(self.client_id) {
+                p.handle_bb_done_burst(self).unwrap();
+                break
             }
         }
     }

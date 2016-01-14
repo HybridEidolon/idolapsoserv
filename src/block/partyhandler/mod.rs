@@ -1,6 +1,7 @@
 //! Where the majority of the game occurs.
 
 use std::sync::Arc;
+use std::collections::VecDeque;
 
 pub mod error;
 pub mod enemygen;
@@ -29,11 +30,14 @@ pub struct Party {
     pub challenge: bool,
     pub single_player: bool,
     pub unique_id: u32,
+    section_id: Option<u8>,
     members: [Option<usize>; 4],
+    bursting: [bool; 4],
     leader_id: u8,
     maps: Arc<Areas>,
     variants: Vec<u32>,
-    enemies: Vec<InstanceEnemy>
+    enemies: Vec<InstanceEnemy>,
+    bc_queue: VecDeque<(usize, Message)>
 }
 
 impl Party {
@@ -64,7 +68,10 @@ impl Party {
             challenge: challenge,
             single_player: single_player,
             unique_id: unique_id,
+            section_id: None,
             members: Default::default(),
+            bursting: Default::default(),
+            bc_queue: Default::default(),
             leader_id: 0,
             maps: maps,
             variants: variants,
@@ -97,7 +104,8 @@ impl Party {
             Some(slot) => slot,
             None => return Err(PartyError::IsFull)
         };
-        if self.is_empty() {
+        if self.num_players() == 0 {
+            info!("Initial leader for \"{}\" set", &self.name[2..]);
             self.leader_id = new_client_id;
         }
 
@@ -114,8 +122,16 @@ impl Party {
         l.one2 = 1;
         l.difficulty = self.difficulty;
         l.episode = self.episode;
+        if let Some(sid) = self.section_id {
+            l.section = sid;
+        } else {
+            // first joiner's section id is the one for the party
+            let cr = handler.get_client_state(player).unwrap();
+            let c = cr.borrow();
+            self.section_id = Some(c.full_char.as_ref().unwrap().chara.section);
+            l.section = c.full_char.as_ref().unwrap().section;
+        }
         l.single_player = if self.single_player {1} else {0};
-        l.players.clear();
         for (i, po) in self.members.iter().enumerate() {
             match po {
                 &Some(cid) => {
@@ -128,24 +144,25 @@ impl Party {
                     ph.name = c.full_char.as_ref().unwrap().chara.name.clone();
                     l.players.push(ph);
                 },
-                _ => ()
+                _ => {
+                    l.players.push(PlayerHdr::default());
+                }
             }
         }
-        debug!("{:?}", l.players);
-        let r: Message = Message::BbGameJoin(l.players.len() as u32, l);
+        let r: Message = Message::BbGameJoin(self.num_players() as u32, l);
         handler.send_to_client(player, r);
 
-        debug!("{:?}", self.members);
+        self.bursting[new_client_id as usize] = true;
 
         // tell the other clients about the player
         for (i, po) in self.members.iter().enumerate() {
             match po {
-                &Some(cid) if cid != player => {
+                &Some(cid) => {
                     let cr = handler.get_client_state(player).unwrap();
                     let c = cr.borrow();
                     let mut l = BbGameAddMember::default();
                     let mut ph = LobbyMember::default();
-                    l.one = 0;
+                    l.one = 1;
                     l.leader_id = self.leader_id;
                     l.client_id = i as u8;
                     l.lobby_num = 0xFF;
@@ -165,6 +182,8 @@ impl Party {
             }
         }
 
+        info!("{:?}", self.members);
+
         Ok(())
     }
 
@@ -177,6 +196,7 @@ impl Party {
                     // pick a new leader
                     match self.find_first_player_not_matching(player) {
                         Some((ii, _)) => {
+                            info!("New leader for \"{}\" elected to {}", &self.name[2..], ii);
                             self.leader_id = ii;
                         },
                         None => {
@@ -187,6 +207,8 @@ impl Party {
                     }
                 }
                 self.members[i as usize] = None;
+                // ensure their bursting flag is unset
+                self.bursting[i as usize] = false;
 
                 // tell the other clients that this player has left, and maybe
                 // the new elected leader
@@ -197,6 +219,7 @@ impl Party {
                     padding: 0
                 };
                 self.bb_broadcast(handler, Some(player), gl.into()).unwrap();
+                info!("{:?}", self.members);
             },
             _ => {
                 return Err(PartyError::NotInParty)
@@ -241,55 +264,190 @@ impl Party {
     }
 
     pub fn is_empty(&self) -> bool {
-        !self.is_full()
+        self.num_players() == 0
     }
 
-    pub fn handle_bb_subcmd_60(&mut self, handler: &mut BlockHandler, m: BbSubCmd60) -> Result<(), PartyError> {
-        // We'll eventually do more on this.
-        let cid = handler.client_id;
+    /// If any player is bursting, returns true.
+    pub fn is_bursting(&self) -> bool {
+        for b in self.bursting.iter() {
+            if *b {
+                return true
+            }
+        }
+        false
+    }
+
+    /// The player limit of this party. If this is single player, it's 1, else 4
+    pub fn player_limit(&self) -> usize {
+        if self.single_player {
+            1
+        } else {
+            4
+        }
+    }
+
+    pub fn handle_bb_done_burst(&mut self, handler: &mut BlockHandler) -> Result<(), PartyError> {
+        // We tell party members with a subcmd, not the main cmd...
+        if let Some(local_slot) = self.client_id_for_player(handler.client_id) {
+            if self.bursting[local_slot as usize] {
+                // send a ping real quick
+                handler.send_to_client(handler.client_id, Message::Ping(0, Ping));
+                self.bursting[local_slot as usize] = false;
+                let mut burst = Bb60DoneBurst::default();
+                burst.data[0] = 0x18;
+                burst.data[1] = 0x08;
+                self.bb_broadcast(handler, None, Message::BbSubCmd60(0, BbSubCmd60::Bb60DoneBurst { client_id: 0, unused: 0, data: burst })).unwrap();
+            } else {
+                return Err(PartyError::NotBursting)
+            }
+        } else {
+            return Err(PartyError::NotInParty)
+        }
+
+        // empty the message queue if we're no longer bursting
+        // only one player can burst at a time so this should always execute
+        if !self.is_bursting() {
+            loop {
+                if let Some((sender, m)) = self.bc_queue.pop_front() {
+                    match m {
+                        Message::BbSubCmd60(_, msg) => {
+                            if let Err(e) = self.handle_bb_subcmd_60(handler, sender, msg) {
+                                return Err(e)
+                            }
+                        },
+                        Message::BbSubCmd6C(_, msg) => {
+                            if let Err(e) = self.handle_bb_subcmd_6c(handler, sender, msg) {
+                                return Err(e)
+                            }
+                        },
+                        Message::BbSubCmd62(dest, msg) => {
+                            if let Err(e) = self.handle_bb_subcmd_62(handler, sender, dest, msg) {
+                                return Err(e)
+                            }
+                        },
+                        Message::BbSubCmd6D(dest, msg) => {
+                            if let Err(e) = self.handle_bb_subcmd_6d(handler, sender, dest, msg) {
+                                return Err(e)
+                            }
+                        },
+                        _ => {
+                            unreachable!()
+                        }
+                    }
+                } else {
+                    // queue is empty
+                    break
+                }
+            }
+        } else {
+            unreachable!()
+        }
+        Ok(())
+    }
+
+    pub fn handle_bb_subcmd_60(&mut self, handler: &mut BlockHandler, sender: usize, m: BbSubCmd60) -> Result<(), PartyError> {
+        if self.is_bursting() {
+            if let &BbSubCmd60::Unknown { cmd, .. } = &m {
+                if cmd == 0x7C {
+                    // safe to send during burst, ignore
+                } else {
+                    // enqueue
+                    self.bc_queue.push_back((sender, Message::BbSubCmd60(0, m)));
+                    return Ok(())
+                }
+            }
+        }
         match m.clone() {
             BbSubCmd60::Bb60ReqExp { data: r, .. } => {
                 self.handle_bb_60_req_exp(handler, r);
             },
             _ => ()
         }
-        info!("{} bc 0x60: {:?}", cid, m);
-        self.bb_broadcast(handler, Some(cid), m.into())
+        debug!("{} bc 0x60: {:?}", sender, m);
+        self.bb_broadcast(handler, Some(sender), m.into())
     }
 
-    pub fn handle_bb_subcmd_62(&mut self, handler: &mut BlockHandler, dest: u32, m: BbSubCmd62) -> Result<(), PartyError> {
-        let cid = handler.client_id;
+    pub fn handle_bb_subcmd_62(&mut self, handler: &mut BlockHandler, sender: usize, dest: u32, m: BbSubCmd62) -> Result<(), PartyError> {
+        if self.is_bursting() {
+            // queue all but some messages
+            match &m {
+                &BbSubCmd62::Unknown { cmd, .. } => {
+                    match cmd {
+                        0x6B | 0x6C | 0x6D | 0x6E | 0x6F | 0x70 | 0x71 => {
+                            // these are safe to send during bursting
+                            // do nothing; fall to actual handle step
+                        },
+                        _ => {
+                            // enqueue if bursting
+                            self.bc_queue.push_back((sender, Message::BbSubCmd62(dest, m.clone())));
+                            return Ok(())
+                        }
+                    }
+                },
+                m => {
+                    self.bc_queue.push_back((sender, Message::BbSubCmd62(dest, m.clone())));
+                    return Ok(())
+                }
+            }
+        }
         if let Some(dest_cid) = self.members[dest as usize] {
-            handler.send_to_client(dest_cid, m.clone().into());
+            handler.send_to_client(dest_cid, Message::BbSubCmd62(dest, m.clone()));
         } else {
-            handler.send_fatal_error(cid, "\tEInvalid message.");
+            // ignore
             return Ok(())
         }
-        info!("{} bc 0x62 dest {}: {:?}", cid, dest, m);
+        debug!("{} bc 0x62 dest {}: {:?}", sender, dest, m);
         Ok(())
     }
 
-    pub fn handle_bb_subcmd_6c(&mut self, handler: &mut BlockHandler, m: BbSubCmd6C) -> Result<(), PartyError> {
-        let cid = handler.client_id;
+    pub fn handle_bb_subcmd_6c(&mut self, handler: &mut BlockHandler, sender: usize, m: BbSubCmd6C) -> Result<(), PartyError> {
+        if self.is_bursting() {
+            if let &BbSubCmd6C::Unknown { cmd, .. } = &m {
+                if cmd == 0x7C {
+                    // safe to send during burst, ignore
+                } else {
+                    // enqueue
+                    self.bc_queue.push_back((sender, Message::BbSubCmd6C(0, m)));
+                    return Ok(())
+                }
+            }
+        }
         match m.clone() {
             BbSubCmd6C::Bb60ReqExp { data: r, .. } => {
                 self.handle_bb_60_req_exp(handler, r);
             },
             _ => ()
         }
-        info!("{} bc 0x6c: {:?}", cid, m);
-        self.bb_broadcast(handler, Some(cid), m.into())
+        debug!("{} bc 0x6c: {:?}", sender, m);
+        self.bb_broadcast(handler, Some(sender), m.into())
     }
 
-    pub fn handle_bb_subcmd_6d(&mut self, handler: &mut BlockHandler, dest: u32, m: BbSubCmd6D) -> Result<(), PartyError> {
-        let cid = handler.client_id;
+    pub fn handle_bb_subcmd_6d(&mut self, handler: &mut BlockHandler, sender: usize, dest: u32, m: BbSubCmd6D) -> Result<(), PartyError> {
+        if self.is_bursting() {
+            // queue all but some messages
+            match &m {
+                &BbSubCmd6D::Unknown { cmd, .. } => {
+                    match cmd {
+                        0x6B | 0x6C | 0x6D | 0x6E | 0x6F | 0x70 | 0x71 => {
+                            // these are safe to send during bursting
+                            // do nothing; fall to actual handle step
+                        },
+                        _ => {
+                            // enqueue if bursting
+                            self.bc_queue.push_back((sender, Message::BbSubCmd6D(dest, m.clone())));
+                            return Ok(())
+                        }
+                    }
+                },
+            }
+        }
         if let Some(&Some(dest_cid)) = self.members.get(dest as usize) {
-            handler.send_to_client(dest_cid, m.clone().into());
+            handler.send_to_client(dest_cid, Message::BbSubCmd6D(dest, m.clone()));
         } else {
-            handler.send_fatal_error(cid, "\tEInvalid message.");
+            // ignore
             return Ok(())
         }
-        info!("{} bc 0x6d dest {}: {:?}", cid, dest, m);
+        debug!("{} bc 0x6d dest {}: {:?}", sender, dest, m);
         Ok(())
     }
 
@@ -299,16 +457,24 @@ impl Party {
         if let Some(ref enemy) = self.enemies.get(m.enemy_id as usize) {
             let bp = {
                 match self.episode {
-                    1 => handler.battle_params.get_ep1(enemy.param_entry, self.single_player).cloned(),
-                    2 => handler.battle_params.get_ep2(enemy.param_entry, self.single_player).cloned(),
-                    3 => handler.battle_params.get_ep4(enemy.param_entry, self.single_player).cloned(),
+                    1 => handler.battle_params.get_ep1(enemy.param_entry, self.single_player, self.difficulty).cloned(),
+                    2 => handler.battle_params.get_ep2(enemy.param_entry, self.single_player, self.difficulty).cloned(),
+                    3 => handler.battle_params.get_ep4(enemy.param_entry, self.single_player, self.difficulty).cloned(),
                     _ => unreachable!()
                 }
             };
 
             if let Some(bp) = bp {
-                info!("Client {} request verified; +{} EXP for killing {} ({})", cid, bp.exp, enemy.name, m.enemy_id);
-                self.award_exp(cid, handler, bp.exp);
+                if m.last_hitter == 1 {
+                    let exp = bp.exp;
+                    info!("Client {} request verified; +{} EXP for last-hitting on {} ({})", cid, exp, enemy.name, m.enemy_id);
+                    self.award_exp(cid, handler, exp);
+                } else {
+                    let exp = bp.exp * 80 / 100;
+                    info!("Client {} request verified; +{} EXP for assisting on {} ({})", cid, exp, enemy.name, m.enemy_id);
+                    self.award_exp(cid, handler, exp);
+                }
+
             } else {
                 error!("Battle param entry for enemy id {} doesn't exist", m.enemy_id);
                 return
@@ -317,18 +483,6 @@ impl Party {
             warn!("Client {} tried to gain exp for an enemy that doesn't exist: {}", cid, m.enemy_id);
             return
         }
-        // handler.send_to_client(cid, Message::BbSubCmd60(0, BbSubCmd60::Bb60GiveExp { client_id: 0, unused: 0, data: Bb60GiveExp(25) }));
-        // send a level up as a test
-        // let mut lup: Bb60LevelUp = Bb60LevelUp::default();
-        // {
-        //     let cr = handler.get_client_state(cid).unwrap();
-        //     let ref mut c = cr.borrow_mut();
-        //     if let Some(ref mut ch) = c.full_char {
-        //         ch.chara.level += 1;
-        //         lup.level = ch.chara.level;
-        //     }
-        // }
-        // handler.send_to_client(cid, Message::BbSubCmd60(0, BbSubCmd60::Bb60LevelUp { client_id: 0, unused: 0, data: lup }));
     }
 
     fn award_exp(&self, client: usize, handler: &mut BlockHandler, exp: u32) {
