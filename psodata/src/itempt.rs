@@ -35,14 +35,13 @@ use byteorder::{BigEndian as BE, ReadBytesExt};
 use psoserial::Serial;
 use psoserial::util::*;
 
-
 #[derive(Clone, Debug)]
 pub struct ItemPT {
     sections: Vec<ProbTable>
 }
 
 impl ItemPT {
-    pub fn load_from_buffers(files: Vec<&[u8]>) -> io::Result<ItemPT> {
+    pub fn load_from_buffers(files: &[&[u8]]) -> io::Result<ItemPT> {
         if files.len() != 10 {
             return Err(io::Error::new(io::ErrorKind::Other, "Not enough files, need 10"));
         }
@@ -190,4 +189,3 @@ impl Serial for ProbTable {
         })
     }
 }
-

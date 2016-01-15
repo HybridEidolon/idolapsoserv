@@ -27,6 +27,7 @@ use ::shipgate::client::callbacks::SgCbMgr;
 use ::services::{ServiceMsg, Service, ServiceType};
 use ::loop_handler::LoopMsg;
 use ::maps::Areas;
+use ::droptables::DropTable;
 
 pub mod client;
 pub mod handler;
@@ -51,7 +52,8 @@ pub struct BlockService {
     battle_params: Arc<BattleParamTables>,
     online_maps: Arc<Areas>,
     offline_maps: Arc<Areas>,
-    level_table: Arc<LevelTable>
+    level_table: Arc<LevelTable>,
+    drop_table: Arc<DropTable>
 }
 
 impl BlockService {
@@ -64,7 +66,8 @@ impl BlockService {
                  battle_params: Arc<BattleParamTables>,
                  online_maps: Arc<Areas>,
                  offline_maps: Arc<Areas>,
-                 level_table: Arc<LevelTable>) -> Service {
+                 level_table: Arc<LevelTable>,
+                 drop_table: Arc<DropTable>) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -85,7 +88,8 @@ impl BlockService {
                 battle_params: battle_params,
                 online_maps: online_maps,
                 offline_maps: offline_maps,
-                level_table: level_table
+                level_table: level_table,
+                drop_table: drop_table
             };
             d.run();
         });

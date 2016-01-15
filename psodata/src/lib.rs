@@ -10,5 +10,6 @@ pub mod map;
 pub mod prs;
 pub mod gsl;
 pub mod itempt;
+pub mod itemrt;
 
 pub use battleparam::BattleParam;

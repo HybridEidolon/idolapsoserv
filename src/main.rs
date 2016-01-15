@@ -63,6 +63,7 @@ use ::shipgate::ShipGateService;
 use ::services::Service;
 use ::config::Config;
 use ::config::ServiceConf;
+use ::droptables::DropTable;
 
 use std::fs::File;
 use std::sync::Arc;
@@ -127,6 +128,13 @@ fn main() {
         level_table = Arc::new(LevelTable::deserialize(&mut decomp_cursor).expect("Unable to parse decompressed PlyLevelTbl.prs"));
     }
     info!("Loaded BB PlyLevelTbl stats information from path: {}/param/PlyLevelTbl.prs", config.data_path);
+
+    // Load ItemPT/RT.gsl
+    let drop_table = Arc::new(DropTable::load_from_file(
+        &format!("{}/param/ItemPT.gsl", config.data_path),
+        &format!("{}/param/ItemRT.gsl", config.data_path))
+        .expect("Unable to load drop tables"));
+    info!("Loaded BB ItemPT.gsl and ItemRT.gsl drop tables from path: {}/param/", config.data_path);
 
     let mut event_loop = EventLoop::new().expect("Could not create event loop");
     info!("Socket event loop created.");
@@ -199,7 +207,8 @@ fn main() {
                     battle_params.clone(),
                     online_maps.clone(),
                     offline_maps.clone(),
-                    level_table.clone()));
+                    level_table.clone(),
+                    drop_table.clone()));
             },
             &ServiceConf::ShipGate { .. } => {
                 match sg {
