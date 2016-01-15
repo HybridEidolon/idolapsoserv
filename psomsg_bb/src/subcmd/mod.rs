@@ -8,9 +8,11 @@ use psomsg_common::util::*;
 
 pub mod wrapper;
 pub mod sub62;
+pub mod sub6d;
 
 pub use self::wrapper::{BbSubCmd60, BbSubCmd62, BbSubCmd6C, BbSubCmd6D};
 pub use self::sub62::*;
+pub use self::sub6d::*;
 
 #[derive(Clone, Debug)]
 pub struct QuestData1(pub Vec<u8>);
@@ -142,5 +144,29 @@ impl Default for Bb60DoneBurst {
         Bb60DoneBurst {
             data: vec![0; 12]
         }
+    }
+}
+
+derive_serial_default! {
+    Bb60DropItem {
+        // uint16_t unk;
+        // uint16_t area;
+        // uint32_t item_id;
+        // float x;
+        // float y;
+        // float z;
+        pub unk: u16,
+        pub area: u16,
+        pub item_id: u32,
+        pub x: f32,
+        pub y: f32,
+        pub z: f32
+    }
+}
+
+derive_serial_default! {
+    Bb60DestroyItem {
+        pub item_id: u32,
+        pub amount: u32
     }
 }

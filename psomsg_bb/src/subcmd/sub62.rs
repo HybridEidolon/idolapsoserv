@@ -2,9 +2,6 @@ use std::io::{Write, Read};
 use std::io;
 
 use psoserial::Serial;
-use psoserial::util::*;
-
-use ::chara::{CharStats, Inventory};
 
 #[derive(Clone, Debug, Default)]
 pub struct Bb62PickUpItem {
@@ -79,100 +76,87 @@ impl Serial for Bb62ItemReq {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Bb6DJoinerChar {
-    pub data: Option<Bb6DJoinerCharInner>
+derive_serial_default! {
+    Bb62OpenBank {
+        pub unk: u32
+    }
 }
-impl Serial for Bb6DJoinerChar {
+
+derive_serial_default! {
+    Bb62ShopReq {
+        pub shop_type: u8,
+        pub padding: u8
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Bb62ShopInv {
+    pub shop_type: u8,
+    pub num_items: u8,
+    pub unused: u16,
+    pub items: [ShopInvItem; 24],
+    pub unused2: [u32; 4]
+}
+impl Serial for Bb62ShopInv {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        // full character is optional here
-        if let Some(ref c) = self.data {
-            try!(c.serialize(dst));
-        }
+        try!(self.shop_type.serialize(dst));
+        try!(self.num_items.serialize(dst));
+        try!(self.unused.serialize(dst));
+        try!(self.items.serialize(dst));
+        try!(self.unused2.serialize(dst));
         Ok(())
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        use std::io::Cursor;
+        let shop_type = try!(Serial::deserialize(src));
+        let num_items = try!(Serial::deserialize(src));
+        let unused = try!(Serial::deserialize(src));
+        let items = try!(Serial::deserialize(src));
+        let unused2 = try!(Serial::deserialize(src));
+        Ok(Bb62ShopInv {
+            shop_type: shop_type,
+            num_items: num_items,
+            unused: unused,
+            items: items,
+            unused2: unused2
+        })
+    }
+}
 
-        let mut buffer = vec![0; 0x4C0];
-        match read_exact(src, &mut buffer) {
-            Ok(_) => {
-                let mut cursor = Cursor::new(buffer);
-                let data = try!(Serial::deserialize(&mut cursor));
-                Ok(Bb6DJoinerChar {
-                    data: Some(data)
-                })
-            },
-            Err(_) => {
-                Ok(Bb6DJoinerChar {
-                    data: None
-                })
-            }
+impl Clone for Bb62ShopInv {
+    fn clone(&self) -> Bb62ShopInv {
+        Bb62ShopInv {
+            shop_type: self.shop_type,
+            num_items: self.num_items,
+            unused: self.unused,
+            items: self.items,
+            unused2: self.unused2
         }
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Bb6DJoinerCharInner {
-    pub unk1: Vec<u8>, // 0x00-0x74    size 0x74
-    pub guildcard: u32, // 0x74-0x78
-    pub unk2: Vec<u8>, // 0x78-0xBC   size 0x44
-    pub techniques: Vec<u8>, // 0xBC-0xD0    size 0x20
-    pub unk3: Vec<u8>, // 0xD0-0x108    size 0x38
-    pub npccrash_buf: Vec<u8>, // 0x108-0x112    size 10
-    pub unk4: Vec<u8>, // 0x112-0x140    size 0x2E
-    pub stats: CharStats, // 0x140-0x14e    size 0x14
-    pub unk5: Vec<u8>, // 0x14e-0x164    size 0x24
-    pub inventory: Inventory // 0x164-0x4B0    size 0x34C
+#[derive(Clone, Copy, Default, Debug)]
+pub struct ShopInvItem {
+    pub item_data: [u32; 3],
+    pub reserved: u32,
+    pub cost: u32
 }
-impl Serial for Bb6DJoinerCharInner {
+impl Serial for ShopInvItem {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        try!(write_array(&self.unk1, 0x74, dst));
-        try!(self.guildcard.serialize(dst));
-        try!(write_array(&self.unk2, 0x44, dst));
-        try!(write_array(&self.techniques, 0x20, dst));
-        try!(write_array(&self.unk3, 0x38, dst));
-        try!(write_array(&self.npccrash_buf, 10, dst));
-        try!(write_array(&self.unk4, 0x2E, dst));
-        try!(self.stats.serialize(dst));
-        try!(write_array(&self.unk5, 0x24, dst));
-        try!(self.inventory.serialize(dst));
+        try!(self.item_data.serialize(dst));
+        try!(self.reserved.serialize(dst));
+        try!(self.cost.serialize(dst));
         Ok(())
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        error!("unk1");
-        let unk1 = try!(read_array(0x74, src));
-        error!("guildcard");
-        let guildcard = try!(Serial::deserialize(src));
-        error!("unk2");
-        let unk2 = try!(read_array(0x44, src));
-        error!("techniques");
-        let techniques = try!(read_array(0x20, src));
-        error!("unk3");
-        let unk3 = try!(read_array(0x38, src));
-        error!("npccrash_buf");
-        let npccrash_buf = try!(read_array(10, src));
-        error!("unk4");
-        let unk4 = try!(read_array(0x2E, src));
-        error!("stats");
-        let stats = try!(Serial::deserialize(src));
-        error!("unk5");
-        let unk5 = try!(read_array(0x24, src));
-        error!("inventory");
-        let inventory = try!(Serial::deserialize(src));
-        Ok(Bb6DJoinerCharInner {
-            unk1: unk1,
-            guildcard: guildcard,
-            unk2: unk2,
-            techniques: techniques,
-            unk3: unk3,
-            npccrash_buf: npccrash_buf,
-            unk4: unk4,
-            stats: stats,
-            unk5: unk5,
-            inventory: inventory
+        let item_data = try!(Serial::deserialize(src));
+        let reserved = try!(Serial::deserialize(src));
+        let cost = try!(Serial::deserialize(src));
+        Ok(ShopInvItem {
+            item_data: item_data,
+            reserved: reserved,
+            cost: cost
         })
     }
 }

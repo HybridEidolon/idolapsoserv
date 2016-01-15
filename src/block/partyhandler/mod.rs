@@ -42,7 +42,8 @@ pub struct Party {
     maps: Arc<Areas>,
     variants: Vec<u32>,
     enemies: Vec<InstanceEnemy>,
-    bc_queue: VecDeque<(usize, Message)>
+    bc_queue: VecDeque<(usize, Message)>,
+    items: Vec<InvItem>
 }
 
 impl Party {
@@ -80,7 +81,8 @@ impl Party {
             leader_id: 0,
             maps: maps,
             variants: variants,
-            enemies: enemies
+            enemies: enemies,
+            items: Vec::new()
         }
     }
 
@@ -388,6 +390,7 @@ impl Party {
     }
 
     pub fn handle_bb_subcmd_60(&mut self, handler: &mut BlockHandler, sender: usize, m: BbSubCmd60) -> Result<(), PartyError> {
+        let mut handled = false;
         if self.is_bursting() {
             if let &BbSubCmd60::Unknown { cmd, .. } = &m {
                 if cmd == 0x7C {
@@ -402,14 +405,24 @@ impl Party {
         match m.clone() {
             BbSubCmd60::Bb60ReqExp { data: r, .. } => {
                 self.handle_bb_60_req_exp(handler, r);
+                handled = true;
+            },
+            BbSubCmd60::Bb60DropItem { data, client_id, .. } => {
+                self.handle_bb_dropitem(handler, data, client_id);
+                handled = true;
             },
             _ => ()
         }
         debug!("{} bc 0x60: {:?}", sender, m);
-        self.bb_broadcast(handler, Some(sender), m.into())
+        if !handled {
+            self.bb_broadcast(handler, Some(sender), m.into())
+        } else {
+            Ok(())
+        }
     }
 
     pub fn handle_bb_subcmd_62(&mut self, handler: &mut BlockHandler, sender: usize, dest: u32, m: BbSubCmd62) -> Result<(), PartyError> {
+        let mut handled = false;
         if self.is_bursting() {
             // queue all but some messages
             match &m {
@@ -432,8 +445,21 @@ impl Party {
                 }
             }
         }
+        match &m {
+            &BbSubCmd62::Bb62OpenBank { ref data, .. } => {
+                self.handle_bb_openbank(handler, data.clone());
+                handled = true;
+            },
+            &BbSubCmd62::Bb62ShopReq { ref data, .. } => {
+                self.handle_bb_shopreq(handler, data.clone());
+                handled = true;
+            }
+            _ => ()
+        }
         if let Some(dest_cid) = self.members[dest as usize] {
-            handler.send_to_client(dest_cid, Message::BbSubCmd62(dest, m.clone()));
+            if !handled {
+                handler.send_to_client(dest_cid, Message::BbSubCmd62(dest, m.clone()));
+            }
         } else {
             // ignore
             return Ok(())
@@ -443,6 +469,7 @@ impl Party {
     }
 
     pub fn handle_bb_subcmd_6c(&mut self, handler: &mut BlockHandler, sender: usize, m: BbSubCmd6C) -> Result<(), PartyError> {
+        let mut handled = false;
         if self.is_bursting() {
             if let &BbSubCmd6C::Unknown { cmd, .. } = &m {
                 if cmd == 0x7C {
@@ -461,10 +488,15 @@ impl Party {
             _ => ()
         }
         debug!("{} bc 0x6c: {:?}", sender, m);
-        self.bb_broadcast(handler, Some(sender), m.into())
+        if !handled {
+            self.bb_broadcast(handler, Some(sender), m.into())
+        } else {
+            Ok(())
+        }
     }
 
     pub fn handle_bb_subcmd_6d(&mut self, handler: &mut BlockHandler, sender: usize, dest: u32, m: BbSubCmd6D) -> Result<(), PartyError> {
+        let mut handled = false;
         if self.is_bursting() {
             // queue all but some messages
             match &m {
@@ -481,10 +513,17 @@ impl Party {
                         }
                     }
                 },
+                _ => {
+                    // enqueue
+                    self.bc_queue.push_back((sender, Message::BbSubCmd6D(dest, m.clone())));
+                    return Ok(())
+                }
             }
         }
         if let Some(&Some(dest_cid)) = self.members.get(dest as usize) {
-            handler.send_to_client(dest_cid, Message::BbSubCmd6D(dest, m.clone()));
+            if !handled {
+                handler.send_to_client(dest_cid, Message::BbSubCmd6D(dest, m.clone()));
+            }
         } else {
             // ignore
             return Ok(())
@@ -527,6 +566,36 @@ impl Party {
         }
     }
 
+    pub fn handle_bb_dropitem(&mut self, handler: &mut BlockHandler, m: Bb60DropItem, slot: u8) {
+        let cid = handler.client_id;
+        debug!("Client {} dropping item: {:?}", cid, m);
+        warn!("Item dropping is stubbed");
+        // TODO Add this item to the lobby inventory.
+
+        self.bb_broadcast(handler, Some(cid), BbMsg::BbSubCmd60(0, BbSubCmd60::Bb60DropItem { client_id: slot, unused: 0, data: m})).unwrap();
+    }
+
+    pub fn handle_bb_openbank(&mut self, handler: &mut BlockHandler, m: Bb62OpenBank) {
+        let cid = handler.client_id;
+        debug!("Client {} opening bank: {:?}", cid, m);
+        warn!("Bank inventory is stubbed");
+        // deliver a blank bank inventory msg...
+        handler.send_to_client(cid, BbMsg::BbSubCmd6D(0, BbSubCmd6D::Bb6DBankInv { flags: 0, unused: 0, data: Bb6DBankInv::default() }));
+    }
+
+    pub fn handle_bb_shopreq(&mut self, handler: &mut BlockHandler, m: Bb62ShopReq) {
+        let cid = handler.client_id;
+        debug!("Client {} opening shop: {:?}", cid, m);
+        warn!("Shop inventory is stubbed");
+        let mut reply = Bb62ShopInv::default();
+        reply.num_items = 1;
+        reply.items[0].item_data[0] = 0x00000103;
+        reply.items[0].reserved = 0xFFFFFFFF;
+        reply.items[0].cost = 10;
+        reply.shop_type = m.shop_type;
+        handler.send_to_client(cid, BbMsg::BbSubCmd62(0, BbSubCmd62::Bb62ShopInv { client_id: 0, unused: 0, data: reply }));
+    }
+
     fn award_exp(&self, client: usize, handler: &mut BlockHandler, exp: u32) {
         let mut leveled_up = false;
         let mut current_level;
@@ -543,7 +612,6 @@ impl Party {
                 // Can't gain any more experience.
                 return
             }
-
 
             loop {
                 if current_level >= 199 {

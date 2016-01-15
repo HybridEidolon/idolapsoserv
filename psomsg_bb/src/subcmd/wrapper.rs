@@ -198,6 +198,8 @@ macro_rules! impl_subcmd_6d_enum {
 
 impl_subcmd_enum! { BbSubCmd60 =
     0x30 => Bb60LevelUp,
+    0x2A => Bb60DropItem,
+    0x63 => Bb60DestroyItem,
     0x72 => Bb60DoneBurst,
     0x6F => QuestData1,
     0xBF => Bb60GiveExp,
@@ -206,6 +208,8 @@ impl_subcmd_enum! { BbSubCmd60 =
 
 impl_subcmd_enum! { BbSubCmd6C =
     0x30 => Bb60LevelUp,
+    0x2A => Bb60DropItem,
+    0x63 => Bb60DestroyItem,
     0x72 => Bb60DoneBurst,
     0x6F => QuestData1,
     0xBF => Bb60GiveExp,
@@ -213,8 +217,12 @@ impl_subcmd_enum! { BbSubCmd6C =
 }
 
 impl_subcmd_enum! { BbSubCmd62 =
-    0x60 => Bb62ItemReq
+    0x60 => Bb62ItemReq,
+    0xB5 => Bb62ShopReq,
+    0xB6 => Bb62ShopInv,
+    0xBB => Bb62OpenBank
 }
 
 impl_subcmd_6d_enum! { BbSubCmd6D =
+    0xBC => Bb6DBankInv
 }
