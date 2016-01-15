@@ -1,0 +1,17 @@
+sudo: false
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
+addons:
+  apt:
+    packages:
+    - libsqlite3-dev
+
+# The unit tests are spread out across the crates, so the test runner doesn't
+# really work. Probably should fix this.
+script: cargo build --verbose
