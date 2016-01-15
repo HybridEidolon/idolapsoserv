@@ -27,7 +27,7 @@
 //!
 //! V3 (GC, BB, Xbox?) probability tables are Big Endian even on BB.
 
-use std::io::{Write, Read};
+use std::io::{Write, Read, Cursor};
 use std::io;
 
 use byteorder::{BigEndian as BE, ReadBytesExt};
@@ -36,47 +36,27 @@ use psoserial::Serial;
 use psoserial::util::*;
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ItemPT {
-    sections: [ProbTable; 10],
+    sections: Vec<ProbTable>
 }
 
 impl ItemPT {
-    pub fn get(&self, id: usize) -> Option<&ProbTable> {
-        if let i @ 0...10 = id {
-            Some(&self.sections[i])
-        } else {
-            None
+    pub fn load_from_buffers(files: Vec<&[u8]>) -> io::Result<ItemPT> {
+        if files.len() != 10 {
+            return Err(io::Error::new(io::ErrorKind::Other, "Not enough files, need 10"));
         }
-    }
-}
 
-impl Serial for ItemPT {
-    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        try!(self.sections.serialize(dst));
-        Ok(())
-    }
+        let mut sections = Vec::with_capacity(10);
+        for f in files.iter() {
+            let mut cursor = Cursor::new(f);
+            let section = try!(ProbTable::deserialize(&mut cursor));
+            sections.push(section);
+        }
 
-    fn deserialize(src: &mut Read) -> io::Result<ItemPT> {
-        let sections = try!(Serial::deserialize(src));
         Ok(ItemPT {
             sections: sections
         })
-    }
-}
-
-impl Clone for ItemPT {
-    fn clone(&self) -> ItemPT {
-        use std::mem;
-        let mut sec: [ProbTable; 10] = unsafe { mem::uninitialized() };
-        for i in 0..10 {
-            let mut clon = self.sections[i].clone();
-            mem::swap(&mut sec[i], &mut clon);
-            mem::forget(clon);
-        }
-        ItemPT {
-            sections: sec
-        }
     }
 }
 
