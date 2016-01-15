@@ -181,3 +181,64 @@ impl Serial for Ipv4Addr {
         unimplemented!()
     }
 }
+
+macro_rules! impl_serial_array {
+    ($size:expr) => {
+        impl<T: Serial> Serial for [T; $size] {
+            fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+                for i in 0..$size {
+                    try!(self[i].serialize(dst));
+                }
+                Ok(())
+            }
+
+            fn deserialize(src: &mut Read) -> io::Result<[T; $size]> {
+                use std::mem::uninitialized;
+                use std::mem::swap;
+                use std::mem::forget;
+                let mut ret = unsafe { uninitialized::<[T; $size]>() };
+                for i in 0..$size {
+                    let mut uninit = try!(Serial::deserialize(src));
+                    swap(&mut uninit, &mut ret[i]);
+                    forget(uninit);
+                }
+                Ok(ret)
+            }
+        }
+    }
+}
+
+// TYPE. LEVEL. NUMBERS. PLS.
+impl_serial_array!(1);
+impl_serial_array!(2);
+impl_serial_array!(3);
+impl_serial_array!(4);
+impl_serial_array!(5);
+impl_serial_array!(6);
+impl_serial_array!(7);
+impl_serial_array!(8);
+impl_serial_array!(9);
+impl_serial_array!(10);
+impl_serial_array!(11);
+impl_serial_array!(12);
+impl_serial_array!(13);
+impl_serial_array!(14);
+impl_serial_array!(15);
+impl_serial_array!(16);
+impl_serial_array!(17);
+impl_serial_array!(18);
+impl_serial_array!(19);
+impl_serial_array!(20);
+impl_serial_array!(21);
+impl_serial_array!(22);
+impl_serial_array!(23);
+impl_serial_array!(24);
+impl_serial_array!(25);
+impl_serial_array!(26);
+impl_serial_array!(27);
+impl_serial_array!(28);
+impl_serial_array!(29);
+impl_serial_array!(30);
+impl_serial_array!(31);
+impl_serial_array!(32);
+

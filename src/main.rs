@@ -34,6 +34,7 @@ pub mod loop_handler;
 pub mod services;
 pub mod config;
 pub mod maps;
+pub mod droptables;
 
 use std::io::Cursor;
 
