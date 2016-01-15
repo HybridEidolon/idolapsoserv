@@ -2,6 +2,8 @@
 
 A Phantasy Star Online emulator written in Rust. Currently very incomplete.
 
+[![Build Status](https://travis-ci.org/BygoneWorlds/idolapsoserv.svg?branch=master)](https://travis-ci.org/BygoneWorlds/idolapsoserv)
+
 ## Features
 
 * Native Windows, Linux, and MacOSX support.
