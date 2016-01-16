@@ -20,6 +20,8 @@ use mio::Sender;
 
 use psomsg::bb::*;
 
+use psodata::leveltable::LevelTable;
+
 use rand::random;
 
 use ::services::message::NetMsg;
@@ -30,6 +32,7 @@ use ::shipgate::client::callbacks::SgCbMgr;
 
 pub mod client;
 pub mod handler;
+pub mod def_inventory;
 
 use self::client::ClientState;
 use self::handler::BbLoginHandler;
@@ -40,11 +43,12 @@ pub struct BbLoginService {
     sg_sender: SgCbMgr<BbLoginHandler>,
     clients: Rc<RefCell<HashMap<usize, ClientState>>>,
     param_files: Arc<(Message, Vec<Message>)>,
+    level_table: Arc<LevelTable>,
     redir_addr: SocketAddrV4
 }
 
 impl BbLoginService {
-    pub fn spawn(bind: &SocketAddr, redir_addr: SocketAddrV4, sender: Sender<LoopMsg>, key_table: Arc<Vec<u32>>, sg_sender: &SgSender, param_files: Arc<(Message, Vec<Message>)>) -> Service {
+    pub fn spawn(bind: &SocketAddr, redir_addr: SocketAddrV4, sender: Sender<LoopMsg>, key_table: Arc<Vec<u32>>, sg_sender: &SgSender, param_files: Arc<(Message, Vec<Message>)>, level_table: Arc<LevelTable>) -> Service {
         let (tx, rx) = channel();
 
         let listener = TcpListener::bind(bind).expect("Couldn't create tcplistener");
@@ -58,6 +62,7 @@ impl BbLoginService {
                 sg_sender: sg_sender.into(),
                 clients: Default::default(),
                 param_files: param_files,
+                level_table: level_table,
                 redir_addr: redir_addr
             };
             d.run()
@@ -73,7 +78,8 @@ impl BbLoginService {
             self.sg_sender.clone(),
             client_id,
             self.clients.clone(),
-            self.param_files.clone()
+            self.param_files.clone(),
+            self.level_table.clone()
         )
     }
 

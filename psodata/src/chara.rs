@@ -126,12 +126,14 @@ impl Serial for Inventory {
     }
 
     fn deserialize(src: &mut Read) -> io::Result<Self> {
-        let item_count = try!(u8::deserialize(src));
+        let _ = try!(u8::deserialize(src));
         let hp_mats = try!(u8::deserialize(src));
         let tp_mats = try!(u8::deserialize(src));
         let lang = try!(u8::deserialize(src));
-        let mut items = try!(read_array(30, src));
-        items.truncate(item_count as usize);
+        let mut items: Vec<InvItem> = try!(read_array(30, src));
+        // Our representation will empty out unused slots, effectively
+        // reorganizing them.
+        items.retain(|i| i.exists != 0);
         Ok(Inventory {
             hp_mats: hp_mats,
             tp_mats: tp_mats,

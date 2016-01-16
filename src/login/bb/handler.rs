@@ -8,6 +8,8 @@ use mio::Sender;
 
 use psomsg::bb::*;
 
+use psodata::leveltable::LevelTable;
+
 use time;
 
 use ::shipgate::client::callbacks::SgCbMgr;
@@ -23,6 +25,7 @@ use ::shipgate::msg::{
 use ::loop_handler::LoopMsg;
 
 use super::client::ClientState;
+use super::def_inventory::make_defaults;
 
 pub struct BbLoginHandler {
     sender: Sender<LoopMsg>,
@@ -30,17 +33,19 @@ pub struct BbLoginHandler {
     client_id: usize,
     clients: Rc<RefCell<HashMap<usize, ClientState>>>,
     param_files: Arc<(Message, Vec<Message>)>,
+    level_table: Arc<LevelTable>,
     redir_addr: SocketAddrV4
 }
 
 impl BbLoginHandler {
-    pub fn new(sender: Sender<LoopMsg>, redir_addr: SocketAddrV4, sg_sender: SgCbMgr<BbLoginHandler>, client_id: usize, clients: Rc<RefCell<HashMap<usize, ClientState>>>, param_files: Arc<(Message, Vec<Message>)>) -> BbLoginHandler {
+    pub fn new(sender: Sender<LoopMsg>, redir_addr: SocketAddrV4, sg_sender: SgCbMgr<BbLoginHandler>, client_id: usize, clients: Rc<RefCell<HashMap<usize, ClientState>>>, param_files: Arc<(Message, Vec<Message>)>, level_table: Arc<LevelTable>) -> BbLoginHandler {
         BbLoginHandler {
             sender: sender,
             sg_sender: sg_sender,
             client_id: client_id,
             clients: clients,
             param_files: param_files,
+            level_table: level_table,
             redir_addr: redir_addr
         }
     }
@@ -372,8 +377,9 @@ impl BbLoginHandler {
             chara.name = chardata.name.clone();
             let mut fc: BbFullCharData = Default::default();
 
-            // TODO initialize inventory
             fc.chara = chara;
+            make_defaults(&mut fc, &self.level_table);
+
             // We don't need to set the account global data here because we aren't
             // going to save it in the shipgate request.
 

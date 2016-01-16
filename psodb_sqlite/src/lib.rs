@@ -300,7 +300,8 @@ impl Backend for Sqlite {
         let exists;
         match stmt.query(&[&(account_id as i64), &(slot as i64)]) {
             Ok(rows) => {
-                exists = rows.size_hint().0 >= 1;
+                info!("Character at {} exists for account {}; overwriting", slot, account_id);
+                exists = rows.count() >= 1;
             },
             Err(e) => return Err(Error::BackendError(Some(Box::new(e))))
         }
@@ -329,7 +330,6 @@ impl Backend for Sqlite {
 
         // We will use update if a character exists in that slot already
         if exists {
-            error!("Updating");
             let mut stmt = try_db!(self.conn.prepare("UPDATE bb_character SET
                 inventory = :inventory,
                 char_data = :char_data,
@@ -344,7 +344,6 @@ impl Backend for Sqlite {
             WHERE account_id = :account_id AND slot = :slot"));
             try_db!(stmt.execute_named(params));
         } else {
-            error!("Inserting");
             let mut stmt = try_db!(self.conn.prepare("INSERT INTO bb_character (
                 account_id,
                 slot,

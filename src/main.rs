@@ -181,7 +181,8 @@ fn main() {
                             event_loop.channel(),
                             bb_keytable.clone(),
                             &sg_sender,
-                            param_files.clone()))
+                            param_files.clone(),
+                            level_table.clone()))
                     },
                     _ => unimplemented!()
                 }
