@@ -5,7 +5,9 @@ use std::io::{Read, Write};
 use std::net::{SocketAddrV4, Ipv4Addr};
 
 use psoserial::Serial;
-use psomsg_common::util::*;
+use psoserial::util::*;
+
+use psodata::chara::BbFullCharData;
 
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 
@@ -148,7 +150,13 @@ impl_shipgate_message_enum! {
     9 => ShipListAck,
     10 => BbUpdateOptions,
     11 => BbUpdateKeys,
-    12 => BbUpdateJoy
+    12 => BbUpdateJoy,
+    13 => BbGetCharacter,
+    14 => BbGetCharacterAck,
+    15 => BbPutCharacter,
+    16 => BbSetLoginFlags,
+    17 => BbGetLoginFlags,
+    18 => BbGetLoginFlagsAck
 }
 
 #[derive(Clone, Debug)]
@@ -210,7 +218,9 @@ pub struct BbGetAccountInfoAck {
     pub team_id: u32,
     pub options: u32,
     pub key_config: Vec<u8>,
-    pub joy_config: Vec<u8>
+    pub joy_config: Vec<u8>,
+    pub shortcuts: Vec<u8>,
+    pub symbol_chats: Vec<u8>
 }
 impl Serial for BbGetAccountInfoAck {
     fn serialize(&self, dst: &mut Write) -> io::Result<()> {
@@ -223,6 +233,10 @@ impl Serial for BbGetAccountInfoAck {
         try!(write_array(&self.key_config, self.key_config.len() as u32, dst));
         try!((self.joy_config.len() as u32).serialize(dst));
         try!(write_array(&self.joy_config, self.joy_config.len() as u32, dst));
+        try!((self.shortcuts.len() as u32).serialize(dst));
+        try!(write_array(&self.shortcuts, self.shortcuts.len() as u32, dst));
+        try!((self.symbol_chats.len() as u32).serialize(dst));
+        try!(write_array(&self.symbol_chats, self.symbol_chats.len() as u32, dst));
         Ok(())
     }
 
@@ -236,6 +250,10 @@ impl Serial for BbGetAccountInfoAck {
         let key_config = try!(read_array(key_config_len, src));
         let joy_config_len = try!(u32::deserialize(src));
         let joy_config = try!(read_array(joy_config_len, src));
+        let shortcuts_len = try!(u32::deserialize(src));
+        let shortcuts = try!(read_array(shortcuts_len, src));
+        let symbol_chats_len = try!(u32::deserialize(src));
+        let symbol_chats = try!(read_array(symbol_chats_len, src));
         Ok(BbGetAccountInfoAck {
             status: status,
             account_id: account_id,
@@ -243,7 +261,9 @@ impl Serial for BbGetAccountInfoAck {
             team_id: team_id,
             options: options,
             key_config: key_config,
-            joy_config: joy_config
+            joy_config: joy_config,
+            shortcuts: shortcuts,
+            symbol_chats: symbol_chats
         })
     }
 }
@@ -257,7 +277,9 @@ impl Default for BbGetAccountInfoAck {
             team_id: 0,
             options: 0,
             key_config: Vec::new(),
-            joy_config: Vec::new()
+            joy_config: Vec::new(),
+            shortcuts: Vec::new(),
+            symbol_chats: Vec::new()
         }
     }
 }
@@ -368,5 +390,84 @@ impl Serial for BbUpdateJoy {
             account_id: account_id,
             joy_config: joy_config
         })
+    }
+}
+
+derive_serial_default! {
+    BbGetCharacter {
+        pub account_id: u32,
+        pub slot: u8
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BbGetCharacterAck {
+    pub status: u32,
+    pub account_id: u32,
+    pub slot: u8,
+    pub full_char: Option<BbFullCharData>
+}
+impl Serial for BbGetCharacterAck {
+    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
+        try!(self.status.serialize(dst));
+        try!(self.account_id.serialize(dst));
+        try!(self.slot.serialize(dst));
+        if self.full_char.is_none() {
+            try!(0u8.serialize(dst));
+        } else {
+            try!(1u8.serialize(dst));
+            try!(self.full_char.as_ref().unwrap().serialize(dst));
+        }
+        Ok(())
+    }
+
+    fn deserialize(src: &mut Read) -> io::Result<Self> {
+        let status = try!(Serial::deserialize(src));
+        let account_id = try!(Serial::deserialize(src));
+        let slot = try!(Serial::deserialize(src));
+        let full_char = {
+            let exists = try!(u8::deserialize(src));
+            if exists > 0u8 {
+                Some(try!(BbFullCharData::deserialize(src)))
+            } else {
+                None
+            }
+        };
+        Ok(BbGetCharacterAck {
+            status: status,
+            account_id: account_id,
+            slot: slot,
+            full_char: full_char
+        })
+    }
+}
+
+derive_serial_default! {
+    BbPutCharacter {
+        pub account_id: u32,
+        pub slot: u8,
+        pub save_acct_data: u8,
+        pub full_char: BbFullCharData
+    }
+}
+
+derive_serial_default! {
+    BbSetLoginFlags {
+        pub account_id: u32,
+        pub flags: u32
+    }
+}
+
+derive_serial_default! {
+    BbGetLoginFlags {
+        pub account_id: u32
+    }
+}
+
+derive_serial_default! {
+    BbGetLoginFlagsAck {
+        pub status: u32,
+        pub account_id: u32,
+        pub flags: u32
     }
 }

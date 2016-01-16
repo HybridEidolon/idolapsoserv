@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["Eidolon"]
 
 [dependencies]
+psodata = { path = "../psodata" }
+psoserial = { path = "../psoserial" }
 psodb_common = { path = "../psodb_common" }
-rusqlite = "0.5"
+rusqlite = "0.6"
 log = "0.3"

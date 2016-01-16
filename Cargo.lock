@@ -19,6 +19,7 @@ dependencies = [
  "rand 0.3.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "staticvec 0.1.0",
+ "time 0.1.34 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "typenum 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -184,7 +185,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -284,8 +285,9 @@ name = "psodb_common"
 version = "0.1.0"
 dependencies = [
  "log 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "psodata 0.1.0",
  "rand 0.3.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "rusqlite 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rusqlite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rust-crypto 0.2.34 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -294,8 +296,10 @@ name = "psodb_sqlite"
 version = "0.1.0"
 dependencies = [
  "log 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "psodata 0.1.0",
  "psodb_common 0.1.0",
- "rusqlite 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "psoserial 0.1.0",
+ "rusqlite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -319,6 +323,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "psodata 0.1.0",
  "psomsg_common 0.1.0",
  "psoserial 0.1.0",
  "staticvec 0.1.0",
@@ -383,12 +388,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "rusqlite"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "libsqlite3-sys 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libsqlite3-sys 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.34 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

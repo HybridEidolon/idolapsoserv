@@ -7,6 +7,7 @@ extern crate psomsg_common;
 #[macro_use] extern crate log;
 extern crate byteorder;
 extern crate typenum;
+extern crate psodata;
 
 use std::io::{Read, Write};
 use std::io;

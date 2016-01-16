@@ -19,6 +19,7 @@ extern crate rustc_serialize;
 extern crate staticvec;
 extern crate env_logger;
 extern crate toml;
+extern crate time;
 
 pub mod patch;
 pub mod data;

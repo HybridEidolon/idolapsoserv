@@ -134,6 +134,7 @@ impl ClientHandler for ShipGateClient {
                 debug!("Reading body");
                 let remaining = size - start;
                 debug!("{} Remaining bytes", remaining);
+                self.read_buffer.resize(size as usize, 0);
                 match if remaining != 0 {self.stream.try_read(&mut self.read_buffer[start..size])} else {Ok(Some(0))} {
                     Ok(Some(bytes)) => {
                         if bytes < remaining {

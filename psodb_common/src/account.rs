@@ -5,6 +5,8 @@ use crypto::sha2::Sha256;
 
 use rand::random;
 
+use psodata::bb_defaults::*;
+
 /// A struct representing a Blue Burst user's account.
 pub struct Account {
     pub id: Option<u32>,
@@ -53,13 +55,16 @@ impl Account {
 }
 
 /// Extended account information for Blue Burst.
+#[derive(Clone, Debug)]
 pub struct BbAccountInfo {
     pub account_id: u32,
     pub guildcard_num: u32,
     pub team_id: u32,
     pub options: u32,
     pub key_config: Vec<u8>,
-    pub joy_config: Vec<u8>
+    pub joy_config: Vec<u8>,
+    pub shortcuts: Vec<u8>,
+    pub symbol_chats: Vec<u8>
 }
 
 impl BbAccountInfo {
@@ -70,21 +75,10 @@ impl BbAccountInfo {
             guildcard_num: bbgc,
             team_id: 1,
             options: 0,
-            key_config: vec![0u8, 0, 0, 0, 38, 0, 0, 0, 0, 0, 0, 0, 34, 0, 0, 0, 0, 0,
-            0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 97, 0, 0, 0, 0, 0, 0, 0, 80, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 89, 0, 0, 0, 0, 0,
-            0, 0, 94, 0, 0, 0, 0, 0, 0, 0, 93, 0, 0, 0, 0, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 95, 0, 0, 0, 0,
-            0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 93, 0, 0, 0, 0, 0, 0, 0, 92, 0, 0, 0, 0, 0, 0, 0, 95, 0, 0, 0, 0,
-            0, 0, 0, 86, 0, 0, 0, 0, 0, 0, 0, 94, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0, 65, 0, 0, 0,
-            0, 0, 0, 0, 66, 0, 0, 0, 0, 0, 0, 0, 67, 0, 0, 0, 0, 0, 0, 0, 68, 0, 0, 0, 0, 0, 0, 0, 69, 0, 0,
-            0, 0, 0, 0, 0, 70, 0, 0, 0, 0, 0, 0, 0, 71, 0, 0, 0, 0, 0, 0, 0, 72, 0, 0, 0, 0, 0, 0, 0, 73, 0,
-            0, 0, 0, 0, 0, 0, 74, 0, 0, 0, 0, 0, 0, 0, 75, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 0, 44, 0,
-            0, 0, 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 0, 0, 46, 0, 0, 0, 0, 0, 0, 0, 47, 0, 0, 0, 0, 0, 0, 0, 48,
-            0, 0, 0, 0, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 50, 0, 0, 0, 0, 0, 0, 0, 51, 0, 0, 0, 1, 0, 0, 0],
-            joy_config: vec![0u8, 1, 3, 4, 0, 0, 1, 0, 0, 0, 2, 0,
-            0, 0, 4, 0, 0, 0, 8, 0, 1, 0, 0, 0, 2, 0, 0, 0, 4, 0, 0, 0, 8, 0, 0, 0, 128, 0,
-            0, 0, 16, 0, 0, 0, 32, 0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 0]
+            key_config: DEFAULT_KEYS.to_vec(),
+            joy_config: DEFAULT_JOY.to_vec(),
+            shortcuts: vec![0; 0xA40],
+            symbol_chats: DEFAULT_SYMBOLCHATS.to_vec()
         }
     }
 }

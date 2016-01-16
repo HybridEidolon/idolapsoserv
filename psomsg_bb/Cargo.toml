@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Eidolon"]
 
 [dependencies]
+psodata = { path = "../psodata" }
 psoserial = { path = "../psoserial" }
 psomsg_common = { path = "../psomsg_common" }
 staticvec = { path = "../staticvec" }

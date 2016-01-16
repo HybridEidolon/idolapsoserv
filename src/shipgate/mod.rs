@@ -128,6 +128,20 @@ impl ShipGateService {
                             Message::BbUpdateJoy(_, body) => {
                                 handler.handle_bb_update_joy(body);
                                 None
+                            },
+                            Message::BbGetCharacter(req, body) => {
+                                Some((req, handler.handle_bb_get_character(body)))
+                            },
+                            Message::BbPutCharacter(_, body) => {
+                                handler.handle_bb_put_character(body);
+                                None
+                            },
+                            Message::BbSetLoginFlags(_, body) => {
+                                handler.handle_bb_set_login_flags(body);
+                                None
+                            },
+                            Message::BbGetLoginFlags(req, body) => {
+                                Some((req, handler.handle_bb_get_login_flags(body)))
                             }
                             _ => unimplemented!()
                         };

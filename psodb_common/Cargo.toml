@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Eidolon"]
 
 [dependencies]
+psodata = { path = "../psodata" }
 log = "0.3"
-rusqlite = "0.5"
+rusqlite = "0.6"
 rust-crypto = "0.2"
 rand = "0.3"

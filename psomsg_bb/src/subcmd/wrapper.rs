@@ -198,11 +198,14 @@ macro_rules! impl_subcmd_6d_enum {
 
 impl_subcmd_enum! { BbSubCmd60 =
     0x30 => Bb60LevelUp,
+    0x29 => Bb60DeleteItem,
     0x2A => Bb60DropItem,
+    0x5D => Bb60DropStack,
     0x63 => Bb60DestroyItem,
     0x72 => Bb60DoneBurst,
     0x6F => QuestData1,
     0xBF => Bb60GiveExp,
+    0xC3 => Bb60DropPos,
     0xC8 => Bb60ReqExp
 }
 
@@ -217,6 +220,7 @@ impl_subcmd_enum! { BbSubCmd6C =
 }
 
 impl_subcmd_enum! { BbSubCmd62 =
+    0x5A => Bb62PickUp,
     0x60 => Bb62ItemReq,
     0xB5 => Bb62ShopReq,
     0xB6 => Bb62ShopInv,

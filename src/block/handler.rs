@@ -17,6 +17,8 @@ use ::loop_handler::LoopMsg;
 use ::shipgate::msg::Message as Sgm;
 use ::shipgate::msg::BbLoginChallenge;
 use ::shipgate::msg::BbGetAccountInfo;
+use ::shipgate::msg::BbGetCharacter;
+use ::shipgate::msg::BbGetCharacterAck;
 use ::maps::Areas;
 
 use super::client::ClientState;
@@ -125,7 +127,7 @@ impl BlockHandler {
                 let sec_data = sec_data.clone();
 
                 let sgm: Sgm = BbGetAccountInfo { account_id: a.account_id }.into();
-                h.sg_sender.request(h.client_id, sgm, move|h, m| {
+                h.sg_sender.request(h.client_id, sgm, move|mut h, m| {
                     if let Sgm::BbGetAccountInfoAck(_, a) = m {
                         let r = Message::BbSecurity(0, BbSecurity {
                             err_code: 0,
@@ -144,122 +146,13 @@ impl BlockHandler {
                         c.bb_guildcard = a.guildcard_num;
                         c.account_id = a.account_id;
 
-                        let mut fc: BbFullCharData;
-                        {
-                            {
-                                let mut ll: Vec<(u32, u32)> = Vec::new();
-                                ll.push((60, 1));
-                                ll.push((60, 2));
-                                ll.push((60, 3));
-                                ll.push((60, 4));
-                                ll.push((60, 5));
-                                ll.push((60, 6));
-                                ll.push((60, 7));
-                                ll.push((60, 8));
-                                ll.push((60, 9));
-                                ll.push((60, 10));
-                                ll.push((60, 11));
-                                ll.push((60, 12));
-                                ll.push((60, 13));
-                                ll.push((60, 14));
-                                ll.push((60, 15));
-                                ll.push((0, 0));
-                                let r = Message::LobbyList(15, LobbyList { items: ll });
-                                h.sender.send((h.client_id, r).into()).unwrap();
+                        // We need to get their character now.
+                        let sgm: Sgm = BbGetCharacter { account_id: a.account_id, slot: sec_data.slot }.into();
+                        h.sg_sender.request(h.client_id, sgm, move |mut h, m| {
+                            if let Sgm::BbGetCharacterAck(_, body) = m {
+                                h.sg_get_character_ack(body)
                             }
-                            // fc = ::util::nsc::read_nsc(&mut File::open("data/default/default_0.nsc").unwrap(), CharClass::HUmar).unwrap();
-                            fc = BbFullCharData::default();
-                            fc.inv.item_count = 6;
-                            fc.inv.hp_mats = 255;
-                            fc.inv.tp_mats = 255;
-                            // fc.inv.lang = 255;
-                            for item in fc.inv.items.iter_mut() {
-                                item.exists = 0xFF00;
-                                item.data.item_id = 0xFFFFFFFF;
-                            }
-                            for item in fc.bank.items.iter_mut() {
-                                item.data.item_id = 0xFFFFFFFF;
-                            }
-                            // fc.inv.hp_mats = 255;
-                            // fc.inv.tp_mats = 127;
-                            fc.inv.items[0].exists = 0x01;
-                            fc.inv.items[0].flags = 0x8;
-                            //0x001200
-                            fc.inv.items[0].data.data[0] = 0x00;
-                            fc.inv.items[0].data.data[1] = 0x12;
-                            fc.inv.items[0].data.item_id = 0x00010000;
-
-                            fc.inv.items[1].exists = 0x01;
-                            fc.inv.items[1].flags = 0;
-                            fc.inv.items[1].data.data[1] = 0x01;
-                            fc.inv.items[1].data.item_id = 0x00010001;
-
-                            fc.inv.items[2].exists = 0x01;
-                            fc.inv.items[2].flags = 0;
-                            fc.inv.items[2].data.data[0] = 0x03; //monomate
-                            fc.inv.items[2].data.data[5] = 10; //stack
-
-                            fc.inv.items[3].exists = 0x01;
-                            fc.inv.items[3].flags = 0;
-                            fc.inv.items[3].data.data[0] = 0x03; //dimate
-                            fc.inv.items[3].data.data[2] = 0x01;
-                            fc.inv.items[3].data.data[5] = 10; //stack
-
-                            fc.inv.items[4].exists = 0x01;
-                            fc.inv.items[4].flags = 0;
-                            fc.inv.items[4].data.data[0] = 0x03; //trimate
-                            fc.inv.items[4].data.data[2] = 0x02;
-                            fc.inv.items[4].data.data[5] = 10; //stack
-
-                            // 0x000303 sol atomizer
-                            fc.inv.items[5].exists = 0x01;
-                            fc.inv.items[5].flags = 0;
-                            fc.inv.items[5].data.data[0] = 0x03;
-                            fc.inv.items[5].data.data[1] = 0x03;
-                            fc.inv.items[5].data.data[5] = 10; // stack
-
-                            fc.name = "\tERico".to_string();
-                            fc.chara.name = "\tERico".to_string();
-                            fc.guildcard = a.guildcard_num;
-                            fc.chara.guildcard = format!("  {}", a.guildcard_num);
-                            fc.option_flags = a.options;
-                            fc.key_config.key_config = a.key_config.clone();
-                            fc.key_config.joy_config = a.joy_config.clone();
-                            fc.key_config.team_id = 0;
-                            fc.chara.stats.hp = 3000;
-                            fc.chara.stats.atp = 3000;
-                            fc.chara.stats.dfp = 3000;
-                            fc.chara.stats.evp = 3000;
-                            fc.chara.stats.ata = 3000;
-                            fc.chara.stats.mst = 3000;
-                            fc.chara.stats.lck = 3000;
-                            fc.section = 3;
-                            fc.class = 3;
-                            fc.chara.section = 3;
-                            fc.chara.class = 3;
-                            fc.chara.model = 1;
-                            fc.chara.model_flag = 8;
-                            fc.chara.costume = 1;
-                            fc.chara.skin = 1;
-                            fc.chara.head = 1;
-                            fc.chara.hair = 1;
-                            fc.chara.hair_r = 0xFF;
-                            fc.chara.hair_g = 0xFF;
-                            fc.chara.hair_b = 0xFF;
-                            fc.chara.prop_x = 0.3;
-                            fc.chara.prop_y = 0.3;
-                            fc.chara.play_time = 0xFFFFFFFF;
-                            fc.autoreply = "".to_string();
-                            fc.infoboard = "".to_string();
-
-
-                            let r = Message::BbFullChar(0, BbFullChar(fc.clone()));
-                            h.sender.send((h.client_id, r).into()).unwrap();
-                            c.full_char = Some(fc);
-                            let r = Message::CharDataRequest(0, CharDataRequest);
-                            h.sender.send((h.client_id, r).into()).unwrap();
-                        }
-                        return
+                        }).unwrap();
                     }
                 }).unwrap();
             } else {
@@ -268,6 +161,55 @@ impl BlockHandler {
                 return
             }
         }).unwrap();
+    }
+
+    fn sg_get_character_ack(&mut self, m: BbGetCharacterAck) {
+        if m.status != 0 {
+            error!("Shipgate error retrieving character, status code {}", m.status);
+            self.send_fatal_error(self.client_id, "Shipgate error retrieving character");
+            return
+        }
+        if m.full_char.is_none() {
+            // Somehow they got here and the shipgate doesn't have a char.
+            error!("Illegal state. Character in slot is missing.");
+            self.send_fatal_error(self.client_id, "Illegal state. Character in slot is missing.");
+            return
+        }
+        let BbGetCharacterAck { full_char, .. } = m;
+        let full_char = full_char.unwrap();
+
+        let cs = self.get_client_state(self.client_id).unwrap();
+        let mut client_state = cs.borrow_mut();
+        {
+            {
+                let mut ll: Vec<(u32, u32)> = Vec::new();
+                ll.push((60, 1));
+                ll.push((60, 2));
+                ll.push((60, 3));
+                ll.push((60, 4));
+                ll.push((60, 5));
+                ll.push((60, 6));
+                ll.push((60, 7));
+                ll.push((60, 8));
+                ll.push((60, 9));
+                ll.push((60, 10));
+                ll.push((60, 11));
+                ll.push((60, 12));
+                ll.push((60, 13));
+                ll.push((60, 14));
+                ll.push((60, 15));
+                ll.push((0, 0));
+                let r = Message::LobbyList(15, LobbyList { items: ll });
+                self.sender.send((self.client_id, r).into()).unwrap();
+            }
+
+            let r = Message::BbFullChar(0, BbFullChar(full_char.clone()));
+            self.sender.send((self.client_id, r).into()).unwrap();
+            client_state.full_char = Some(full_char);
+            let r = Message::CharDataRequest(0, CharDataRequest);
+            self.sender.send((self.client_id, r).into()).unwrap();
+        }
+        return
     }
 
     fn get_new_party_id(&mut self) -> u32 {

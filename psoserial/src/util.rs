@@ -39,7 +39,7 @@ pub fn write_ascii_len(s: &str, len: usize, dst: &mut Write) -> io::Result<()> {
 
     let padding: isize = len as isize - r.len() as isize;
     if padding < 0 {
-        warn!("ascii string too long, truncating to fit");
+        warn!("ascii string too long, truncating \"{}\" to fit", s);
         try!(dst.write_all(&r[..len]));
         Ok(())
     } else {
@@ -136,7 +136,7 @@ pub fn write_utf16_len(s: &str, len: usize, dst: &mut Write) -> io::Result<()> {
 
     let padding: isize = len as isize - r.len() as isize;
     if padding < 0 {
-        warn!("utf16 string too long, truncating to fit");
+        warn!("utf16 string too long, truncating \"{}\" to fit", s);
         try!(dst.write_all(&r[..len]));
         Ok(())
     } else {

@@ -11,5 +11,7 @@ pub mod prs;
 pub mod gsl;
 pub mod itempt;
 pub mod itemrt;
+pub mod chara;
+pub mod bb_defaults;
 
 pub use battleparam::BattleParam;

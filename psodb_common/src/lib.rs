@@ -3,6 +3,7 @@
 #[macro_use] extern crate log;
 extern crate crypto;
 extern crate rand;
+extern crate psodata;
 
 pub mod error;
 pub mod pool;
@@ -13,6 +14,8 @@ pub use self::error::Error;
 pub use self::account::Account;
 pub use self::account::BbAccountInfo;
 pub use self::pool::Pool;
+
+use psodata::chara::BbFullCharData;
 
 use std::result;
 
@@ -45,4 +48,16 @@ pub trait Backend {
     fn fetch_bb_account_info(&self, account_id: u32) -> Result<Option<BbAccountInfo>>;
 
     fn put_bb_account_info(&self, info: &BbAccountInfo) -> Result<()>;
+
+    /// Fetch the BB character at the slot for the account ID.
+    fn fetch_bb_character(&self, account_id: u32, slot: u8) -> Result<Option<BbFullCharData>>;
+
+    /// Places a BB character in the DB for the slot on the account. If the
+    /// character exists, it will be overwritten. The `save_acct_data` indicates
+    /// whether or not to save the account-global data from the character info.
+    fn put_bb_character(&self, account_id: u32, slot: u8, chara: BbFullCharData, save_acct_data: bool) -> Result<()>;
+
+    fn set_bb_login_flags(&self, account_id: u32, flags: u32) -> Result<()>;
+
+    fn get_bb_login_flags(&self, account_id: u32) -> Result<u32>;
 }

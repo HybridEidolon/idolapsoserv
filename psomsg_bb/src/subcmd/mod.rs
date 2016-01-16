@@ -165,8 +165,36 @@ derive_serial_default! {
 }
 
 derive_serial_default! {
+    Bb60DeleteItem {
+        pub item_id: u32,
+        pub amount: u32
+    }
+}
+
+derive_serial_default! {
     Bb60DestroyItem {
         pub item_id: u32,
         pub amount: u32
+    }
+}
+
+derive_serial_default! {
+    Bb60DropPos {
+        pub area: u32,
+        pub x: f32,
+        pub z: f32,
+        pub item_id: u32,
+        pub amount: u32
+    }
+}
+
+derive_serial_default! {
+    Bb60DropStack {
+        pub area: u32,
+        pub x: f32,
+        pub z: f32,
+        pub item: [u32; 3],
+        pub item_id: u32,
+        pub item2: u32
     }
 }

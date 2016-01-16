@@ -6,7 +6,6 @@ use std::io;
 use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
 
 use psomsg_common::util::*;
-use super::default_config;
 use super::PSOBB_COPYRIGHT_STRING;
 use super::data::*;
 use super::chara::*;
@@ -711,94 +710,6 @@ impl Serial for BbMsg1 {
         try!(u32::deserialize(src));
         let msg = try!(read_utf16(src));
         Ok(BbMsg1(msg))
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct BbTeamAndKeyData {
-    // uint8_t unk[0x114];
-    // uint8_t key_config[0x16C];
-    // uint8_t joystick_config[0x38];
-    // uint32_t guildcard;
-    // uint32_t team_id;
-    // uint32_t team_info[2];
-    // uint16_t team_priv;
-    // uint16_t reserved;
-    // uint16_t team_name[16];
-    // uint8_t team_flag[2048];
-    // uint32_t team_rewards[2];
-    pub unk: Vec<u8>,
-    pub key_config: Vec<u8>,
-    pub joy_config: Vec<u8>,
-    pub guildcard: u32,
-    pub team_id: u32,
-    pub team_info: (u32, u32),
-    pub team_priv: u16,
-    pub team_name: String,
-    pub team_flag: Vec<u8>,
-    pub team_rewards: u32
-}
-impl Serial for BbTeamAndKeyData {
-    fn serialize(&self, dst: &mut Write) -> io::Result<()> {
-        try!(write_array(&self.unk, 276, dst));
-        try!(write_array(&self.key_config, 364, dst));
-        try!(write_array(&self.joy_config, 56, dst));
-        try!(dst.write_u32::<LE>(self.guildcard));
-        try!(dst.write_u32::<LE>(self.team_id));
-        try!(dst.write_u32::<LE>(self.team_info.0));
-        try!(dst.write_u32::<LE>(self.team_info.1));
-        try!(dst.write_u16::<LE>(self.team_priv));
-        try!(dst.write_u16::<LE>(0));
-        try!(write_utf16_len(&self.team_name, 28, dst));
-        try!(0x00986C84u32.serialize(dst));
-        try!(write_array(&self.team_flag, 2048, dst));
-        try!(self.team_rewards.serialize(dst));
-        Ok(())
-    }
-
-    fn deserialize(src: &mut Read) -> io::Result<BbTeamAndKeyData> {
-        let unk = try!(read_array(276, src));
-        let key_config = try!(read_array(364, src));
-        let joy_config = try!(read_array(56, src));
-        let guildcard = try!(src.read_u32::<LE>());
-        let team_id = try!(src.read_u32::<LE>());
-        let team_info = (try!(src.read_u32::<LE>()), try!(src.read_u32::<LE>()));
-        let team_priv = try!(src.read_u16::<LE>());
-        try!(src.read_u16::<LE>());
-        let team_name = try!(read_utf16_len(28, src));
-        try!(u32::deserialize(src));
-        let team_flag = try!(read_array(2048, src));
-        let team_rewards = try!(Serial::deserialize(src));
-        Ok(BbTeamAndKeyData {
-            unk: unk,
-            key_config: key_config,
-            joy_config: joy_config,
-            guildcard: guildcard,
-            team_id: team_id,
-            team_info: team_info,
-            team_priv: team_priv,
-            team_name: team_name,
-            team_flag: team_flag,
-            team_rewards: team_rewards
-        })
-    }
-}
-
-impl Default for BbTeamAndKeyData {
-    fn default() -> BbTeamAndKeyData {
-        BbTeamAndKeyData {
-            // TODO actual BB defaults for these
-            unk: vec![0u8; 276],
-            key_config: default_config::DEFAULT_KEYS.to_vec(),
-            joy_config: default_config::DEFAULT_JOY.to_vec(),
-            guildcard: 0, // This is always 0 if the player isn't in a team.
-            team_id: 0,
-            team_info: (0, 0),
-            team_priv: 0,
-            team_name: "".to_string(), // Must be zeroed out when not in a team
-            team_flag: vec![0; 2048],
-            team_rewards: 0xFFFFFFFF
-        }
     }
 }
 

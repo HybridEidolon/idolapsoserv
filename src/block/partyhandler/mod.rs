@@ -43,7 +43,17 @@ pub struct Party {
     variants: Vec<u32>,
     enemies: Vec<InstanceEnemy>,
     bc_queue: VecDeque<(usize, Message)>,
-    items: Vec<InvItem>
+    items: Vec<InvItem>,
+    next_drop_pos: [Option<NextDropPos>; 4]
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct NextDropPos {
+    pub area: u32,
+    pub x: f32,
+    pub z: f32,
+    pub item_id: u32,
+    pub amount: u32
 }
 
 impl Party {
@@ -82,7 +92,8 @@ impl Party {
             maps: maps,
             variants: variants,
             enemies: enemies,
-            items: Vec::new()
+            items: Vec::new(),
+            next_drop_pos: Default::default()
         }
     }
 
@@ -411,6 +422,14 @@ impl Party {
                 self.handle_bb_dropitem(handler, data, client_id);
                 handled = true;
             },
+            BbSubCmd60::Bb60DropPos { data, client_id, .. } => {
+                self.handle_bb_droppos(handler, data, client_id);
+                handled = true;
+            },
+            BbSubCmd60::Bb60DeleteItem { data, client_id, .. } => {
+                self.handle_bb_delete_item(handler, data, client_id);
+                handled = true;
+            }
             _ => ()
         }
         debug!("{} bc 0x60: {:?}", sender, m);
@@ -453,6 +472,10 @@ impl Party {
             &BbSubCmd62::Bb62ShopReq { ref data, .. } => {
                 self.handle_bb_shopreq(handler, data.clone());
                 handled = true;
+            },
+            &BbSubCmd62::Bb62PickUp { ref data, .. } => {
+                self.handle_bb_pick_up(handler, dest, data.clone());
+                handled = true;
             }
             _ => ()
         }
@@ -469,7 +492,7 @@ impl Party {
     }
 
     pub fn handle_bb_subcmd_6c(&mut self, handler: &mut BlockHandler, sender: usize, m: BbSubCmd6C) -> Result<(), PartyError> {
-        let mut handled = false;
+        let handled = false;
         if self.is_bursting() {
             if let &BbSubCmd6C::Unknown { cmd, .. } = &m {
                 if cmd == 0x7C {
@@ -496,7 +519,7 @@ impl Party {
     }
 
     pub fn handle_bb_subcmd_6d(&mut self, handler: &mut BlockHandler, sender: usize, dest: u32, m: BbSubCmd6D) -> Result<(), PartyError> {
-        let mut handled = false;
+        let handled = false;
         if self.is_bursting() {
             // queue all but some messages
             match &m {
@@ -573,6 +596,57 @@ impl Party {
         // TODO Add this item to the lobby inventory.
 
         self.bb_broadcast(handler, Some(cid), BbMsg::BbSubCmd60(0, BbSubCmd60::Bb60DropItem { client_id: slot, unused: 0, data: m})).unwrap();
+    }
+
+    pub fn handle_bb_droppos(&mut self, handler: &mut BlockHandler, m: Bb60DropPos, slot: u8) {
+        let cid = handler.client_id;
+        debug!("Client {} prepping to drop stack", cid);
+
+        self.next_drop_pos[slot as usize] = Some(NextDropPos {
+            area: m.area,
+            x: m.x,
+            z: m.z,
+            item_id: m.item_id,
+            amount: m.amount
+        });
+
+        self.bb_broadcast(handler, Some(cid), BbMsg::BbSubCmd60(0, BbSubCmd60::Bb60DropPos { client_id: slot, unused: 0, data: m })).unwrap();
+    }
+
+    /// This is sent when a client is dropping a stack from their inventory.
+    pub fn handle_bb_delete_item(&mut self, handler: &mut BlockHandler, m: Bb60DeleteItem, slot: u8) {
+        let cid = handler.client_id;
+
+        warn!("Stack dropping is stubbed");
+
+        if let Some(nd) = self.next_drop_pos[slot as usize] {
+            // we need to get the item they are dropping from their inventory, but we don't do character tracking yet
+            // first, drop the stack for everyone
+            self.bb_broadcast(handler, None, BbMsg::BbSubCmd60(0, BbSubCmd60::Bb60DropStack { client_id: slot, unused: 0, data: Bb60DropStack {
+                area: nd.area,
+                x: nd.x,
+                z: nd.z,
+                item: [0x00000004, 0, 0],
+                item_id: 402,
+                item2: nd.amount
+            }})).unwrap();
+
+            // broadcast delete item from inventory
+            self.bb_broadcast(handler, Some(cid), BbMsg::BbSubCmd60(0, BbSubCmd60::Bb60DeleteItem { client_id: slot, unused: 0, data: m })).unwrap();
+
+            self.next_drop_pos[slot as usize] = None;
+        } else {
+            warn!("Client {} tried to drop stack without sending drop pos first", cid);
+            handler.send_fatal_error(cid, "\tEIllegal message.");
+            return
+        }
+    }
+
+    pub fn handle_bb_pick_up(&mut self, handler: &mut BlockHandler, _dest: u32, _m: Bb62PickUp) {
+        let cid = handler.client_id;
+        debug!("Client {} picking up item", cid);
+        warn!("Item pick up is stubbed");
+        // do nothing yet, we need to track characters and lobby items to be able to do this
     }
 
     pub fn handle_bb_openbank(&mut self, handler: &mut BlockHandler, m: Bb62OpenBank) {

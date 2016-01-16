@@ -5,10 +5,13 @@ use psomsg::bb::BbSecurityData;
 #[derive(Clone, Default)]
 pub struct ClientState {
     pub sec_data: BbSecurityData,
+    pub account_id: u32,
     pub team_id: u32,
     pub bb_guildcard: u32,
     pub ships: Option<Vec<(SocketAddrV4, String)>>,
     pub options: u32,
     pub key_config: Vec<u8>,
-    pub joy_config: Vec<u8>
+    pub joy_config: Vec<u8>,
+    pub shortcuts: Vec<u8>,
+    pub symbol_chats: Vec<u8>
 }

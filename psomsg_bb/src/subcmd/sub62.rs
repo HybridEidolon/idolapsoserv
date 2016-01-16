@@ -160,3 +160,10 @@ impl Serial for ShopInvItem {
         })
     }
 }
+
+derive_serial_default! {
+    Bb62PickUp {
+        pub item_id: u32,
+        pub area: u32
+    }
+}
