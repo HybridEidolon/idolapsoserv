@@ -21,6 +21,8 @@ use psomsg::bb::*;
 use psodata::battleparam::BattleParamTables;
 use psodata::leveltable::LevelTable;
 
+use ::shipgate::msg::Message as Sgm;
+use ::shipgate::msg::BbPutCharacter;
 use ::shipgate::client::SgSender;
 use ::services::message::NetMsg;
 use ::shipgate::client::callbacks::SgCbMgr;
@@ -181,6 +183,21 @@ impl BlockService {
                         }
                     }
 
+                    // Now we will persist their current character to the shipgate.
+                    {
+                        let cs = h.get_client_state(id).unwrap();
+                        let ref client_state = cs.borrow();
+                        if let Some(ref full_char) = client_state.full_char {
+                            info!("Saving {}'s character due to disconnect", id);
+                            self.sg_sender.send(Sgm::BbPutCharacter(0, BbPutCharacter {
+                                account_id: client_state.account_id,
+                                slot: client_state.sec_data.slot,
+                                save_acct_data: 0,
+                                full_char: full_char.clone()
+                            })).unwrap();
+                        }
+                    }
+
                     drop(h);
 
                     {self.clients.borrow_mut().remove(&id);}
@@ -205,6 +222,7 @@ impl BlockService {
                         Message::BbUpdateJoy(_, m) => { h.bb_update_joy(m) },
                         Message::MenuSelect(_, m) => { h.menu_select(m) },
                         Message::DoneBursting(_, _) => { h.done_burst() },
+                        Message::BbFullChar(_, b) => { h.bb_full_char(b) },
                         a => {
                             info!("{:?}", a);
                         }

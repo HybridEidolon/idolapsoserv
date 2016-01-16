@@ -662,4 +662,25 @@ impl BlockHandler {
             }
         }
     }
+
+    pub fn bb_full_char(&mut self, m: BbFullChar) {
+        // TODO verify... or just track based on their other messages sent
+        // this is prone to being cheated. we'll just save some parts until
+        // the implementation is more thorough.
+        let BbFullChar(full_char) = m;
+
+        let BbFullCharData { inv, chara, bank, .. } = full_char;
+
+        let cs = self.get_client_state(self.client_id).unwrap();
+        let ref mut client_state = cs.borrow_mut();
+        if let Some(ref mut cur_fc) = client_state.full_char {
+            info!("Client {} triggered manual save", self.client_id);
+            cur_fc.inv = inv;
+            cur_fc.chara = chara;
+            cur_fc.bank = bank;
+        } else {
+            warn!("Client sent full character but we didn't have one loaded for them. This is an abnormal state.");
+            return
+        }
+    }
 }
