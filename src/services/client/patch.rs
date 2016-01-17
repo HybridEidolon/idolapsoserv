@@ -72,6 +72,7 @@ impl ClientHandler for PatchClient {
         // We will probably want to know when to read first.
         // The event loop notify() will tell us when we want to write.
         self.interests.insert(EventSet::readable());
+        self.interests.insert(EventSet::hup());
 
         event_loop.register(
             &self.stream,

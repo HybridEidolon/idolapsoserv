@@ -62,7 +62,7 @@ impl Service {
         event_loop.register(
             &self.listener,
             self.token,
-            EventSet::readable(),
+            EventSet::readable() | EventSet::hup(),
             PollOpt::edge() | PollOpt::oneshot()
         )
     }
@@ -71,7 +71,7 @@ impl Service {
         event_loop.reregister(
             &self.listener,
             self.token,
-            EventSet::readable(),
+            EventSet::readable() | EventSet::hup(),
             PollOpt::edge() | PollOpt::oneshot()
         )
     }
