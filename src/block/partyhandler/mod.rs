@@ -44,7 +44,9 @@ pub struct Party {
     enemies: Vec<InstanceEnemy>,
     bc_queue: VecDeque<(usize, Message)>,
     items: Vec<InvItem>,
-    next_drop_pos: [Option<NextDropPos>; 4]
+    next_drop_pos: [Option<NextDropPos>; 4],
+    player_drop_counter: [u32; 4],
+    party_drop_counter: u32
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -93,7 +95,9 @@ impl Party {
             variants: variants,
             enemies: enemies,
             items: Vec::new(),
-            next_drop_pos: Default::default()
+            next_drop_pos: Default::default(),
+            player_drop_counter: Default::default(),
+            party_drop_counter: 0x00810000
         }
     }
 
@@ -123,14 +127,14 @@ impl Party {
             None => return Err(PartyError::IsFull)
         };
         if self.num_players() == 0 {
-            info!("Initial leader for \"{}\" set", &self.name[2..]);
+            debug!("Initial leader for \"{}\" set", &self.name[2..]);
             self.leader_id = new_client_id;
         }
 
         // put them in that slot
         self.members[new_client_id as usize] = Some(player);
 
-        info!("New client ID is {}", new_client_id);
+        debug!("New client ID is {}", new_client_id);
 
         let mut l = BbGameJoin::default();
         l.maps = self.variants.clone();
@@ -200,7 +204,22 @@ impl Party {
             }
         }
 
-        info!("{:?}", self.members);
+        // finally, adjust item IDs and set the item ID counter.
+        {
+            let cr = handler.get_client_state(player).unwrap();
+            let mut c = cr.borrow_mut();
+            let mut full_char = c.full_char.as_mut().unwrap();
+            // Adjust the joining player's inventory IDs (the client does this too)
+            let mut id = 0x00010000 | ((new_client_id as u32) << 21) | self.player_drop_counter[new_client_id as usize];
+            for item in full_char.inv.items.iter_mut() {
+                item.data.item_id = id;
+                id += 1;
+                info!("Item ID {}", item.data.item_id);
+            }
+            self.player_drop_counter[new_client_id as usize] = id;
+        }
+
+        debug!("{:?}", self.members);
 
         Ok(())
     }
@@ -237,7 +256,7 @@ impl Party {
                     padding: 0
                 };
                 self.bb_broadcast(handler, Some(player), gl.into()).unwrap();
-                info!("{:?}", self.members);
+                debug!("{:?}", self.members);
             },
             _ => {
                 return Err(PartyError::NotInParty)
@@ -325,6 +344,7 @@ impl Party {
         // empty the message queue if we're no longer bursting
         // only one player can burst at a time so this should always execute
         if !self.is_bursting() {
+            info!("{} messages in broadcast message queue", self.bc_queue.len());
             loop {
                 if let Some((sender, m)) = self.bc_queue.pop_front() {
                     match m {
@@ -485,6 +505,7 @@ impl Party {
             }
         } else {
             // ignore
+            warn!("Unknown 0x62 destination {}", dest);
             return Ok(())
         }
         debug!("{} bc 0x62 dest {}: {:?}", sender, dest, m);
@@ -549,6 +570,7 @@ impl Party {
             }
         } else {
             // ignore
+            warn!("Unknown 0x6D destination {}", dest);
             return Ok(())
         }
         debug!("{} bc 0x6d dest {}: {:?}", sender, dest, m);
@@ -591,7 +613,7 @@ impl Party {
 
     pub fn handle_bb_dropitem(&mut self, handler: &mut BlockHandler, m: Bb60DropItem, slot: u8) {
         let cid = handler.client_id;
-        debug!("Client {} dropping item: {:?}", cid, m);
+        info!("Client {} dropping item: {:?}", cid, m);
         warn!("Item dropping is stubbed");
         // TODO Add this item to the lobby inventory.
 
@@ -622,14 +644,17 @@ impl Party {
         if let Some(nd) = self.next_drop_pos[slot as usize] {
             // we need to get the item they are dropping from their inventory, but we don't do character tracking yet
             // first, drop the stack for everyone
+            info!("Dropping item stack from item ID {}", m.item_id);
             self.bb_broadcast(handler, None, BbMsg::BbSubCmd60(0, BbSubCmd60::Bb60DropStack { client_id: slot, unused: 0, data: Bb60DropStack {
                 area: nd.area,
                 x: nd.x,
                 z: nd.z,
-                item: [0x00000004, 0, 0],
-                item_id: 402,
-                item2: nd.amount
+                item: [4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                item_id: self.player_drop_counter[slot as usize],
+                item2: [nd.amount as u8, 0, 0, 0]
             }})).unwrap();
+
+            self.player_drop_counter[slot as usize] += 1;
 
             // broadcast delete item from inventory
             self.bb_broadcast(handler, Some(cid), BbMsg::BbSubCmd60(0, BbSubCmd60::Bb60DeleteItem { client_id: slot, unused: 0, data: m })).unwrap();

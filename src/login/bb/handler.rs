@@ -248,6 +248,7 @@ impl BbLoginHandler {
             let mut b = self.clients.borrow_mut();
             let mut c = b.get_mut(&self.client_id).unwrap();
             c.sec_data.sel_char = 1;
+            c.sec_data.slot = slot as u8;
             let r = Message::BbSecurity(0, BbSecurity {
                 err_code: 0,
                 tag: 0x00010000,

@@ -193,8 +193,8 @@ derive_serial_default! {
         pub area: u32,
         pub x: f32,
         pub z: f32,
-        pub item: [u32; 3],
+        pub item: [u8; 12],
         pub item_id: u32,
-        pub item2: u32
+        pub item2: [u8; 4]
     }
 }
