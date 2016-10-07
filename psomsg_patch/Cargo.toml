@@ -8,5 +8,5 @@ psoserial = { path = "../psoserial" }
 psomsg_common = { path = "../psomsg_common" }
 staticvec = { path = "../staticvec" }
 typenum = "1.1"
-byteorder = "0.4"
+byteorder = "0.5"
 log = "0.3"

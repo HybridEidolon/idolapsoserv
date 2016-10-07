@@ -13,14 +13,16 @@ staticvec = { path = "staticvec" }
 psoserial = { path = "psoserial" }
 psomsg_common = { path = "psomsg_common" }
 rand = "0.3"
-byteorder = "0.4"
+byteorder = "0.5"
 rustc-serialize = "0.3"
 encoding = "0.2"
 log = "0.3"
 env_logger = "0.3"
 typenum = "1.1"
-toml = "0.1"
+toml = "0.2"
 docopt = "0.6"
-crc = "1.2"
+crc = "1.3"
 mio = "0.5"
 time = "0.1"
+
+[workspace]

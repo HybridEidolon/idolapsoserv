@@ -5,6 +5,6 @@ authors = ["Eidolon"]
 
 [dependencies]
 psoserial = { path = "../psoserial" }
-byteorder = "0.4"
+byteorder = "0.5"
 log = "0.3"
 encoding = "0.2"
