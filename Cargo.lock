@@ -274,7 +274,7 @@ dependencies = [
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "psodata 0.1.0",
  "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
- "rusqlite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rusqlite 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rust-crypto 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -286,7 +286,7 @@ dependencies = [
  "psodata 0.1.0",
  "psodb_common 0.1.0",
  "psoserial 0.1.0",
- "rusqlite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rusqlite 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -375,7 +375,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "rusqlite"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -507,7 +507,7 @@ dependencies = [
 "checksum rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)" = "2791d88c6defac799c3f20d74f094ca33b9332612d9aef9078519c82e4fe04a5"
 "checksum regex 0.1.77 (registry+https://github.com/rust-lang/crates.io-index)" = "64b03446c466d35b42f2a8b203c8e03ed8b91c0f17b56e1f84f7210a257aa665"
 "checksum regex-syntax 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)" = "279401017ae31cf4e15344aa3f085d0e2e5c1e70067289ef906906fdbe92c8fd"
-"checksum rusqlite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a1bc0a1ff3ea744aefbcb696a20c32817f9cc3a7f1c33f5e77e88d019a147b71"
+"checksum rusqlite 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "640a993868ae442ddcd75e8d4a9babee283a6d1c9f49bd9eb7d1bfef88cea6e8"
 "checksum rust-crypto 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)" = "f76d05d3993fd5f4af9434e8e436db163a12a9d40e1a58a726f27a01dfd12a2a"
 "checksum rustc-serialize 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)" = "6159e4e6e559c81bd706afe9c8fd68f547d3e851ce12e76b1de7914bab61691b"
 "checksum slab 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "d807fd58c4181bbabed77cb3b891ba9748241a552bcc5be698faaebefc54f46e"

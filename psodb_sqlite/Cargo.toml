@@ -7,5 +7,5 @@ authors = ["Eidolon"]
 psodata = { path = "../psodata" }
 psoserial = { path = "../psoserial" }
 psodb_common = { path = "../psodb_common" }
-rusqlite = "0.6"
+rusqlite = "0.6.1"
 log = "0.3"
