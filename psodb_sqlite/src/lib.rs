@@ -72,7 +72,7 @@ impl Sqlite {
 
     /// Migrate the database
     fn migrate(_: &Connection, _: i64) -> Result<()> {
-        //let version = try_db!(c.query_row("SELECT version FROM version LIMIT 1"), &[], |r| r.get::<i64>(0));
+        //let version = try_db!(c.query_row("SELECT version FROM version LIMIT 1"), &[], |r| r.get::<_, i64>(0));
         Ok(())
     }
 
@@ -124,7 +124,7 @@ impl Backend for Sqlite {
 
         let mut results = try_db!(stmt.query_map(&[&username], |row| {
             Account {
-                id: Some(row.get::<i64>(0) as u32),
+                id: Some(row.get::<_, i64>(0) as u32),
                 username: username.to_owned(),
                 password_hash: row.get(1),
                 password_invalidated: i2b(row.get(2)),
@@ -168,13 +168,13 @@ impl Backend for Sqlite {
         let mut results = try_db!(stmt.query_map(&[&(account_id as i64)], |row| {
             BbAccountInfo {
                 account_id: account_id,
-                guildcard_num: row.get::<i64>(0) as u32,
-                team_id: row.get::<i64>(1) as u32,
-                options: row.get::<i64>(2) as u32,
-                key_config: row.get::<Vec<u8>>(3),
-                joy_config: row.get::<Vec<u8>>(4),
-                shortcuts: row.get::<Vec<u8>>(5),
-                symbol_chats: row.get::<Vec<u8>>(6)
+                guildcard_num: row.get::<_, i64>(0) as u32,
+                team_id: row.get::<_, i64>(1) as u32,
+                options: row.get::<_, i64>(2) as u32,
+                key_config: row.get::<_, Vec<u8>>(3),
+                joy_config: row.get::<_, Vec<u8>>(4),
+                shortcuts: row.get::<_, Vec<u8>>(5),
+                symbol_chats: row.get::<_, Vec<u8>>(6)
             }
         }));
 
@@ -226,7 +226,7 @@ impl Backend for Sqlite {
             tech_menu,
             quest_data2 FROM bb_character WHERE account_id=? AND slot=?"));
         let mut results = match query.query_map(&[&id, &slot], |row| {
-            let chara: BbChar = try_db!(Serial::deserialize(&mut Cursor::new(row.get::<Vec<u8>>(1))));
+            let chara: BbChar = try_db!(Serial::deserialize(&mut Cursor::new(row.get::<_, Vec<u8>>(1))));
             let key_config = BbTeamAndKeyData {
                 unk: vec![0; 276],
                 key_config: acc_info.key_config.clone(),
@@ -240,16 +240,16 @@ impl Backend for Sqlite {
                 team_rewards: 0
             };
             Ok(BbFullCharData {
-                inv: try_db!(Serial::deserialize(&mut Cursor::new(row.get::<Vec<u8>>(0)))),
+                inv: try_db!(Serial::deserialize(&mut Cursor::new(row.get::<_, Vec<u8>>(0)))),
                 chara: chara.clone(),
                 unk: vec![0; 0x0010],
                 option_flags: acc_info.options,
-                quest_data1: row.get::<Vec<u8>>(2),
-                bank: try_db!(Serial::deserialize(&mut Cursor::new(row.get::<Vec<u8>>(3)))),
+                quest_data1: row.get::<_, Vec<u8>>(2),
+                bank: try_db!(Serial::deserialize(&mut Cursor::new(row.get::<_, Vec<u8>>(3)))),
                 guildcard: acc_info.guildcard_num,
                 name: chara.name.clone(),
                 team_name: "".to_string(), // TODO no teams yet
-                guildcard_desc: row.get::<String>(4),
+                guildcard_desc: row.get::<_, String>(4),
                 reserved1: 1,
                 reserved2: 1,
                 section: chara.section,
@@ -257,13 +257,13 @@ impl Backend for Sqlite {
                 unk2: 0,
                 symbol_chats: acc_info.symbol_chats.clone(),
                 shortcuts: acc_info.shortcuts.clone(),
-                autoreply: row.get::<String>(5),
-                infoboard: row.get::<String>(6),
+                autoreply: row.get::<_, String>(5),
+                infoboard: row.get::<_, String>(6),
                 unk3: vec![0; 0x001C],
-                challenge_data: row.get::<Vec<u8>>(7),
-                tech_menu: row.get::<Vec<u8>>(8),
+                challenge_data: row.get::<_, Vec<u8>>(7),
+                tech_menu: row.get::<_, Vec<u8>>(8),
                 unk4: vec![0; 0x002C],
-                quest_data2: row.get::<Vec<u8>>(9),
+                quest_data2: row.get::<_, Vec<u8>>(9),
                 key_config: key_config
             })
         })
@@ -299,9 +299,17 @@ impl Backend for Sqlite {
         let mut stmt = try_db!(self.conn.prepare("SELECT id FROM bb_character WHERE account_id=? AND slot=? LIMIT 1"));
         let exists;
         match stmt.query(&[&(account_id as i64), &(slot as i64)]) {
-            Ok(rows) => {
-                info!("Character at {} exists for account {}; overwriting", slot, account_id);
-                exists = rows.count() >= 1;
+            Ok(mut rows) => {
+                match rows.next() {
+                    Some(Err(e)) => return Err(Error::BackendError(Some(Box::new(e)))),
+                    Some(_) => {
+                        info!("Character at {} exists for account {}; overwriting", slot, account_id);
+                        exists = true;
+                    },
+                    None => {
+                        exists = false;
+                    }
+                }
             },
             Err(e) => return Err(Error::BackendError(Some(Box::new(e))))
         }
@@ -389,7 +397,7 @@ impl Backend for Sqlite {
         let mut stmt = try_db!(self.conn.prepare("SELECT login_flags FROM bb_flags WHERE account_id=?"));
         let aid = account_id as i64;
         let mut results = try_db!(stmt.query_map(&[&aid], |row| {
-            row.get::<i64>(0)
+            row.get::<_, i64>(0)
         }));
         match results.next() {
             Some(Ok(f)) => Ok(f as u32),
